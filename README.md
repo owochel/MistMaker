@@ -52,6 +52,8 @@ git clone https://github.com/owochel/Programmable-Mist-Maker.git
 cp -r Programmable-Mist-Maker/MistMaker-Arduino-Library ~/Documents/Arduino/libraries/MistMaker
 ```
 
+Note: Your library location may be different. [Look at Arduino Support Article here](https://support.arduino.cc/hc/en-us/articles/4415103213714-Find-sketches-libraries-board-cores-and-other-files-on-your-computer) to see how you can locate your Libary folder.
+
 ## 🔐 License
    •  Hardware: CERN-OHL-P v2
    •  Code: MIT License
@@ -65,7 +67,7 @@ Certification ID: US002742
 
 ⸻
 
-## ✍️ Author
+## ✍️ Authors
 
-Created by David Yang and shuang cai
+Created by [David Yang](https://davidyang.work/) and [shuang cai](https://shuangcai.cargo.site/)
 Released at the Open Hardware Summit 2025
