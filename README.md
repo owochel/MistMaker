@@ -1,0 +1,71 @@
+# MistMaker
+
+**MistMaker** is an Arduino library for controlling piezoelectric mist maker modules using PWM, current sensing, and optional button toggling. It was developed for the custom PCB released during the **Open Hardware Summit 2025** workshop session.
+
+This project is [Open Source Hardware Certified](https://certification.oshwa.org/us002742.html) under OSHWA ID **US002742**, enabling educators, artists, and developers to explore the creative potential of mist as a material and medium.
+
+---
+
+## 🌱 Features
+
+- 108.7kHz PWM control for mist actuation
+- Current sensing via analog input
+- Toggle control using a button
+- LED status indicator
+- Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
+- Modular and reusable class-based structure
+
+---
+
+## 🧰 Hardware Requirements
+
+- Seeed Studio XIAO ESP32-C6 (or compatible ESP32 board)
+- Certified Mist Maker PCB from OHS 2025
+- Piezo mist module
+- Optional: Button (for manual toggle) and LED (for status)
+
+---
+
+## 📦 Installation
+
+### 🔗 Option 1: Install via Arduino IDE using GitHub URL
+
+1. In Arduino IDE, go to:  
+   `Sketch > Include Library > Add .ZIP Library...`
+
+2. Paste this URL into your browser and download the ZIP file:  
+   [Download Library ZIP](https://github.com/owochel/Programmable-Mist-Maker/archive/refs/heads/main.zip)
+
+3. Select the downloaded ZIP file in Arduino IDE.
+
+4. You're done! Now you can access example code via:  
+   `File > Examples > MistMaker > SimpleControl`
+
+---
+
+### 💻 Option 2: Clone or Copy into Libraries Folder (Advanced)
+
+Clone this subfolder manually and place it inside your Arduino libraries directory:
+
+```bash
+git clone https://github.com/owochel/Programmable-Mist-Maker.git
+cp -r Programmable-Mist-Maker/MistMaker-Arduino-Library ~/Documents/Arduino/libraries/MistMaker
+```
+
+## 🔐 License
+   •  Hardware: CERN-OHL-P v2
+   •  Code: MIT License
+
+⸻
+
+## 🔖 Open Source Hardware Certification
+
+Certified by OSHWA
+Certification ID: US002742
+
+⸻
+
+## ✍️ Author
+
+Created by David Yang and shuang cai
+Released at the Open Hardware Summit 2025
