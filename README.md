@@ -40,7 +40,8 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 
 4. You're done! Now you can access example code via:  
    `File > Examples > MistMaker > SimpleControl`
-
+   or
+   `File > Examples > MistMaker > Blink`
 ---
 
 ### 💻 Option 2: Clone or Copy into Libraries Folder (Advanced)
