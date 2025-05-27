@@ -67,6 +67,18 @@ Certification ID: US002742
 
 ⸻
 
+## Documentation Notes
+
+This README and the library were written with the support of ChatGPT (GPT-4o) to:
+
+* Summarize logs and prototyping notes
+* Clarify complex circuit behavior
+* Reformat documentation for aesthetic accessibility
+
+All technical data was reviewed and validated against physical test results and datasheets.
+
+⸻
+
 ## ✍️ Authors
 
 Created by [David Yang](https://davidyang.work/) and [shuang cai](https://shuangcai.cargo.site/)
