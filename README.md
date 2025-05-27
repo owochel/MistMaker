@@ -26,6 +26,23 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 
 ---
 
+## Board Compatibility
+
+This library is designed for **ESP32-based boards** and relies on ESP32's LEDC PWM API for high-frequency mist control. It has been tested with:
+
+- Seeed Studio XIAO ESP32-C6
+- ESP32 DevKit V1
+- ESP32-S3
+
+❗ This library does **not support AVR-based boards** like Arduino Uno or Mega out of the box.
+
+If you are using a different board and wish to adapt the library, you may need to:
+
+- In the libary code, replace `ledcWrite()` and `ledcAttach()` with generic `analogWrite()` or board-specific PWM functions
+- Adjust analog read scaling (12-bit vs 10-bit ADC)
+
+---
+
 ## 📦 Installation
 
 ### 🔗 Option 1: Install via Arduino IDE using GitHub URL
