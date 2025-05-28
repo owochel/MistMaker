@@ -19,7 +19,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 
 ## 🧰 Hardware Requirements
 
-- Seeed Studio XIAO ESP32-C6 (or compatible ESP32 board)
+- [Seeed Studio XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-Pre-Soldered-p-6328.html) (or compatible ESP32 board)
 - Certified Mist Maker PCB from OHS 2025
 - Piezo mist module
 - Optional: Button (for manual toggle) and LED (for status)
