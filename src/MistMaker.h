@@ -14,6 +14,8 @@ public:
   void printStatus();
   bool isOn();
   float readCurrentVoltage();
+  void setDuty(uint8_t duty);
+  void applyLevel(uint8_t level);
 
 private:
   int _mistPin, _enPin, _sensePin, _ledPin;

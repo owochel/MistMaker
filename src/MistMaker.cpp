@@ -59,3 +59,23 @@ void MistMaker::printStatus() {
 
   _lastPrintTime = millis();
 }
+
+void MistMaker::setDuty(uint8_t duty) {
+  _dutyCycle = duty;
+  if (_state) {
+    ledcWrite(_mistPin, _dutyCycle);
+  }
+}
+
+void MistMaker::applyLevel(uint8_t level) {
+  if (level == 0) {
+    turnOff();
+    return;
+  }
+  if (!_state) {
+    digitalWrite(_enPin, HIGH);
+    digitalWrite(_ledPin, HIGH);
+    _state = true;
+  }
+  setDuty(level);
+}

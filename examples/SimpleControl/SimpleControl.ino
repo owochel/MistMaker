@@ -24,7 +24,10 @@ void loop() {
     delay(300); // debounce
   }
 
-  if (millis() - millis() > 5000) {
+  // Print every 5 seconds
+  static unsigned long last = 0;
+  if (millis() - last > 5000) {
     mist.printStatus();
+    last = millis();
   }
 }

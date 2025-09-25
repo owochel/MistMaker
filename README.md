@@ -14,6 +14,8 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - LED status indicator
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
 - Modular and reusable class-based structure
+- Optional DMX-512 reception example (ESP32 + RS485 transceiver)
+- Optional ESP‑NOW Wi‑Fi control example (wireless 0–255 level)
 
 ---
 
@@ -41,6 +43,11 @@ If you are using a different board and wish to adapt the library, you may need t
 - In the libary code, replace `ledcWrite()` and `ledcAttach()` with generic `analogWrite()` or board-specific PWM functions
 - Adjust analog read scaling (12-bit vs 10-bit ADC)
 
+### Notes on DMX and Wi‑Fi examples
+
+- DMX example depends on an external DMX library (e.g. `ESP32DMX`). Install from Library Manager and wire an RS485 transceiver (MAX485). The first DMX channel maps to mist power (0–255).
+- ESP‑NOW example puts the device in station mode and listens for a one‑byte payload `{ level }` to set power wirelessly.
+
 ---
 
 ## 📦 Installation
@@ -57,8 +64,10 @@ If you are using a different board and wish to adapt the library, you may need t
 
 4. You're done! Now you can access example code via:  
    `File > Examples > MistMaker > SimpleControl`
-   or
    `File > Examples > MistMaker > Blink`
+   `File > Examples > MistMaker > DMX_Receiver`
+   `File > Examples > MistMaker > ESPNow_Control`
+
 ---
 
 ### 💻 Option 2: Clone or Copy into Libraries Folder (Advanced)
@@ -73,8 +82,9 @@ cp -r MistMaker ~/Documents/Arduino/libraries/
 Note: Your library location may be different. [Look at Arduino Support Article here](https://support.arduino.cc/hc/en-us/articles/4415103213714-Find-sketches-libraries-board-cores-and-other-files-on-your-computer) to see how you can locate your Libary folder.
 
 ## 🔐 License
-   •  Hardware: CERN-OHL-P v2
-   •  Code: MIT License
+
+• Hardware: CERN-OHL-P v2
+• Code: MIT License
 
 ⸻
 
@@ -89,9 +99,9 @@ Certification ID: US002742
 
 This README and the library were written with the support of ChatGPT (GPT-4o) to:
 
-* Summarize logs and prototyping notes
-* Clarify complex circuit behavior
-* Reformat documentation for aesthetic accessibility
+- Summarize logs and prototyping notes
+- Clarify complex circuit behavior
+- Reformat documentation for aesthetic accessibility
 
 All technical data was reviewed and validated against physical test results and datasheets.
 
