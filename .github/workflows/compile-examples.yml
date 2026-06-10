@@ -1,0 +1,32 @@
+name: Compile Examples
+
+on:
+  push:
+    paths: ["src/**", "examples/**", ".github/workflows/compile-examples.yml"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fqbn:
+          - esp32:esp32:XIAO_ESP32C6   # production target
+          - esp32:esp32:XIAO_ESP32S3   # secondary target
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile all examples
+        uses: arduino/compile-sketches@v1
+        with:
+          fqbn: ${{ matrix.fqbn }}
+          platforms: |
+            - name: esp32:esp32
+              source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          libraries: |
+            - source-path: ./        # this library
+            - name: PubSubClient     # HomeAssistant_MQTT example
+          sketch-paths: |
+            - examples
+          enable-warnings-report: true
