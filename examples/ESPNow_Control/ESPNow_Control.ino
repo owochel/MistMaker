@@ -14,7 +14,8 @@ typedef struct __attribute__((packed)) {
   uint8_t level; // 0-255, 0=off
 } MistMsg;
 
-void onEspNowRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+// arduino-esp32 v3.x (ESP-IDF 5) receive-callback signature; sender MAC is in info->src_addr
+void onEspNowRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
   if (len < (int)sizeof(MistMsg)) return;
   MistMsg msg;
   memcpy(&msg, incomingData, sizeof(MistMsg));

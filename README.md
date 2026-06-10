@@ -120,7 +120,7 @@ Defaults: divider ratio 2.0, low = 3.45 V, critical = 3.20 V. Override with
 | `WiFiPhoneControl` | Phone control via WiFi AP + web UI, graceful low-battery shutdown |
 | `HomeAssistant_MQTT` | Native Home Assistant device via MQTT Discovery |
 | `Blink`, `SimpleControl`, `Ramping` | v1.0 basics (button toggle, level ramp) |
-| `DMX_Receiver`, `ESPNow_Control` | Show-control integrations |
+| `ESPNow_Control` | Show-control via ESP-NOW (no router needed) |
 
 All examples are in `File > Examples > MistMaker` after installation.
 
