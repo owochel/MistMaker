@@ -40,7 +40,7 @@ MistMaker mist(MistMakerBatteryKitV03());
 // ---- Your WiFi + your deployed relay ----
 const char* WIFI_SSID  = "your-wifi";
 const char* WIFI_PASS  = "your-password";
-const char* RELAY_HOST = "mistmaker-relay.YOURNAME.workers.dev"; // no https://, no path
+const char* RELAY_HOST = "mistmaker-relay.YOURNAME.workers.dev"; // your deployed host, e.g. mistcontrol.byproductlab.com (no https://, no path)
 const uint16_t RELAY_PORT = 443;
 const char* ROOM = "workshop";            // any phone in this room controls this maker (letters/numbers only)
 

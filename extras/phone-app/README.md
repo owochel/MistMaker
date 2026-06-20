@@ -68,6 +68,19 @@ You need a free [Cloudflare account](https://dash.cloudflare.com/sign-up) and
 That's it — no database, no broker, no secrets. Updating the app later is just
 `npx wrangler deploy` again.
 
+### Use your own domain (optional)
+
+If your domain's DNS is on Cloudflare, serve the app from a custom subdomain
+like `mistcontrol.byproductlab.com`:
+
+- **In code:** uncomment the `routes` block in `wrangler.toml` (set it to your
+  subdomain) and `npx wrangler deploy` — Cloudflare creates the DNS record + TLS
+  cert automatically.
+- **Or in the dashboard:** Workers & Pages → `mistmaker-relay` → Settings →
+  Domains & Routes → Add → Custom Domain → enter your subdomain.
+
+Then set `RELAY_HOST` in the firmware to that subdomain.
+
 ### Will this stay free? Yes — comfortably.
 
 Cloudflare's free plan gives Durable Objects their **own 100,000 requests/day**,

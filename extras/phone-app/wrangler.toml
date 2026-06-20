@@ -12,6 +12,13 @@ name = "mistmaker-relay"
 main = "src/worker.js"
 compatibility_date = "2025-01-01"
 
+# Custom domain (optional). If your domain's zone is in the same Cloudflare
+# account, uncomment this and `wrangler deploy` creates the DNS record + TLS
+# cert for you. Change it to YOUR domain before deploying.
+# routes = [
+#   { pattern = "mistcontrol.byproductlab.com", custom_domain = true }
+# ]
+
 # The web app — served as static files straight from Cloudflare's edge.
 [assets]
 directory = "./public"
