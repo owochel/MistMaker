@@ -136,6 +136,12 @@ public:
   float lastProbeMa() const { return _lastProbeMa; }
 
   // ------------------- battery (needs a battery pin) -------------------
+  // Turn battery sensing OFF at runtime. Battery Kit V0.3's D1 divider can't
+  // tell USB-C power from a real cell, so the reading is unreliable (it caused
+  // false low-battery shutdowns). After this call every battery_* method
+  // behaves exactly as on a board with no cell: readBatteryVolts()/percent()
+  // return 0 and batteryState() returns MIST_BATT_UNKNOWN (never CRITICAL).
+  void disableBattery() { _battPin = -1; }
   // Divider ratio = (Rtop+Rbottom)/Rbottom. Battery Kit V0.3 uses 2.0 (1:1).
   void setBatteryDivider(float ratio) { _battDivider = ratio; }
   // Thresholds in volts (defaults: low 3.45 V, critical 3.20 V under load).

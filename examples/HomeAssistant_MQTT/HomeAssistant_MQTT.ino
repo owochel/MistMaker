@@ -4,8 +4,12 @@
 // automatically (Settings > Devices > MQTT) as:
 //   * a dimmable "light" entity controlling the mist (HA's light card gives
 //     us an on/off toggle + brightness slider for free)
-//   * a battery voltage sensor + battery % sensor (Battery Kit)
 //   * a water/disc status sensor (from current sensing)
+//
+// NOTE: battery sensing is intentionally OFF on this branch — Battery Kit V0.3
+// can't tell USB-C power from a real cell on D1, so the reading is unreliable.
+// TODO(V0.4): re-add the battery % sensor + low-battery deep-sleep once the
+// board has a real USB-present sense pin.
 //
 // Requirements:
 //   * MQTT broker (the standard Mosquitto add-on) + MQTT integration in HA
@@ -20,7 +24,6 @@
 #include <MistMaker.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include <esp_sleep.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
 MistMaker mist(MistMakerBatteryKitV03());
@@ -43,7 +46,6 @@ PubSubClient mqtt(wifi);
 
 char topicCmd[64], topicState[64], topicAvail[64], topicSensors[64];
 unsigned long lastSensorPub = 0;
-unsigned long lastBatteryCheck = 0;
 
 const char* waterName(MistSenseState s) {
   switch (s) {
@@ -63,11 +65,8 @@ void publishState() {
 }
 
 void publishSensors() {
-  char buf[160];
-  snprintf(buf, sizeof(buf),
-           "{\"battery_v\":%.2f,\"battery_pct\":%u,\"water\":\"%s\"}",
-           mist.readBatteryVolts(), mist.batteryPercent(),
-           waterName(mist.senseState()));
+  char buf[96];
+  snprintf(buf, sizeof(buf), "{\"water\":\"%s\"}", waterName(mist.senseState()));
   mqtt.publish(topicSensors, buf, true);
 }
 
@@ -87,15 +86,6 @@ void publishDiscovery() {
     "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"avty_t\":\"%s\","
     "\"brightness\":true,\"bri_scl\":255,%s}",
     DEV_ID, topicCmd, topicState, topicAvail, devBuf);
-  mqtt.publish(topic, payload, true);
-
-  // Battery % sensor
-  snprintf(topic, sizeof(topic), "homeassistant/sensor/%s_batt/config", DEV_ID);
-  snprintf(payload, sizeof(payload),
-    "{\"name\":\"Mist Maker Battery\",\"uniq_id\":\"%s_batt\","
-    "\"stat_t\":\"%s\",\"avty_t\":\"%s\",\"dev_cla\":\"battery\","
-    "\"unit_of_meas\":\"%%\",\"val_tpl\":\"{{ value_json.battery_pct }}\",%s}",
-    DEV_ID, topicSensors, topicAvail, devBuf);
   mqtt.publish(topic, payload, true);
 
   // Water status sensor
@@ -144,19 +134,10 @@ void connectMqtt() {
   }
 }
 
-void gracefulPowerOff() {
-  Serial.println("[BATTERY] Critical - graceful shutdown.");
-  mqtt.publish(topicAvail, "offline", true); // tell HA we're going away
-  mqtt.disconnect();
-  mist.shutdown();
-  WiFi.disconnect(true);
-  delay(100);
-  esp_deep_sleep_start();
-}
-
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  mist.disableBattery();   // V0.3: D1 can't tell USB from battery (see note up top)
   mist.begin();
 
   snprintf(topicCmd,     sizeof(topicCmd),     "mistmaker/%s/set",     DEV_ID);
@@ -188,11 +169,5 @@ void loop() {
     lastSensorPub = millis();
     mist.probe();
     publishSensors();
-  }
-
-  // Battery watchdog every 5 s.
-  if (millis() - lastBatteryCheck > 5000) {
-    lastBatteryCheck = millis();
-    if (mist.batteryState() == MIST_BATT_CRITICAL) gracefulPowerOff();
   }
 }

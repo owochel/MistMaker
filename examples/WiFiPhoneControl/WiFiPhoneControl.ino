@@ -4,13 +4,16 @@
 //   1. Power the board. On your phone, join WiFi "MistMaker" (password
 //      "mistmist" — change below).
 //   2. Open http://192.168.4.1 in any browser.
-//   3. Slide to dim, tap to toggle. Status (water, battery) updates live.
+//   3. Slide to dim, tap to toggle. Status (water) updates live.
 //
-// Built for workshops and demos: shows dimming, current-sense water
-// detection, and (on the Battery Kit) battery monitoring with a graceful
-// low-battery shutdown — when the pack gets critically low the firmware
-// stops the mist, disables the 5V boost rail, and deep-sleeps the ESP32
-// instead of browning out mid-mist.
+// Built for workshops and demos: dimming + current-sense water detection over
+// a self-hosted WiFi AP — no app, no router, no internet.
+//
+// NOTE: battery monitoring + low-battery deep-sleep are intentionally OFF on
+// this branch. Battery Kit V0.3 can't tell USB-C power from a real cell on D1,
+// so the reading is unreliable (it caused false brown-out shutdowns), and a
+// board that deep-sleeps is awkward to reflash mid-workshop. TODO(V0.4): re-add
+// battery brown-out + graceful deep-sleep once the board has a USB-present pin.
 //
 // Board: Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
 // Library: MistMaker >= 1.1.0
@@ -18,11 +21,10 @@
 #include <MistMaker.h>
 #include <WiFi.h>
 #include <WebServer.h>
-#include <esp_sleep.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
 MistMaker mist(MistMakerBatteryKitV03());
-// MistMaker mist(MistMakerExtensionV01());   // no battery -> battery UI hides itself
+// MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());
 
@@ -32,7 +34,6 @@ const char* AP_PASSWORD = "mistmist";   // >= 8 chars, or "" for an open network
 WebServer server(80);
 
 uint8_t targetLevel = 0;
-unsigned long lastBatteryCheck = 0;
 unsigned long lastProbe = 0;
 bool blocked = false;          // true when sense says we must not mist
 
@@ -64,7 +65,6 @@ const char PAGE[] PROGMEM = R"HTML(
          oninput="setLevel(this.value)">
  </div>
  <div class="row"><span>Water</span><span class="val" id="water">-</span></div>
- <div class="row" id="battrow"><span>Battery</span><span class="val" id="batt">-</span></div>
 </div>
 <script>
 let on=false;
@@ -77,9 +77,6 @@ function refresh(){fetch('/api/status').then(r=>r.json()).then(s=>{
  document.getElementById('lvl').value=s.level;
  document.getElementById('lvlv').textContent=Math.round(s.level/2.55)+'%';
  document.getElementById('water').textContent=s.water;
- if(s.batt_v>0.5){document.getElementById('batt').textContent=
-   s.batt_v.toFixed(2)+' V ('+s.batt_pct+'%)'+(s.batt_low?' LOW!':'');}
- else{document.getElementById('battrow').style.display='none';}
 });}
 setInterval(refresh,2000);refresh();
 </script></body></html>
@@ -96,13 +93,9 @@ const char* waterName(MistSenseState s) {
 }
 
 void handleStatus() {
-  char buf[192];
-  const float bv = mist.readBatteryVolts();
-  snprintf(buf, sizeof(buf),
-           "{\"level\":%u,\"water\":\"%s\",\"batt_v\":%.2f,"
-           "\"batt_pct\":%u,\"batt_low\":%s}",
-           mist.getLevel(), waterName(mist.senseState()), bv,
-           mist.batteryPercent(), mist.batteryLow() ? "true" : "false");
+  char buf[96];
+  snprintf(buf, sizeof(buf), "{\"level\":%u,\"water\":\"%s\"}",
+           mist.getLevel(), waterName(mist.senseState()));
   server.send(200, "application/json", buf);
 }
 
@@ -114,20 +107,10 @@ void handleSet() {
   server.send(200, "text/plain", "ok");
 }
 
-// ------------------------------------------------ graceful low-battery off
-void gracefulPowerOff() {
-  Serial.println("[BATTERY] Critical - graceful shutdown to avoid brown-out.");
-  mist.shutdown();           // mist off, boost rail off, LED off
-  WiFi.softAPdisconnect(true);
-  WiFi.mode(WIFI_OFF);
-  delay(100);
-  // Sleep forever; recharge + reset (or power cycle) wakes the board.
-  esp_deep_sleep_start();
-}
-
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  mist.disableBattery();   // V0.3: D1 can't tell USB from battery (see note up top)
   mist.begin();
 
   WiFi.mode(WIFI_AP);
@@ -147,14 +130,6 @@ void setup() {
 
 void loop() {
   server.handleClient();
-
-  // Battery watchdog (Battery Kit): every 5 s. Critical -> graceful off.
-  if (millis() - lastBatteryCheck > 5000) {
-    lastBatteryCheck = millis();
-    MistBatteryState bs = mist.batteryState();
-    if (bs == MIST_BATT_CRITICAL) gracefulPowerOff();
-    if (bs == MIST_BATT_LOW) Serial.println("[BATTERY] Low - charge soon.");
-  }
 
   // Water/disc watchdog: probe every 60 s while running (during a brief
   // internal dip the user barely notices), or every 10 s while blocked.
