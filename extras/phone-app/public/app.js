@@ -132,7 +132,7 @@ function renderTargets() {
 }
 function renderDevs() {
   devCount.textContent = makers.length;
-  if (!makers.length) { devsEl.innerHTML = '<li class="empty">No makers yet — flash one &amp; power it on ☁</li>'; return; }
+  if (!makers.length) { devsEl.innerHTML = `<li class="empty">No makers in room &ldquo;${esc(room)}&rdquo; yet — power one on, or set its room to &ldquo;${esc(room)}&rdquo; in the WiFi setup ☁</li>`; return; }
   devsEl.innerHTML = makers.map(d => {
     const lvl = clamp(+d.level || 0);
     const w = d.water === "ok" ? '<span class="badge ok">water ok</span>'
