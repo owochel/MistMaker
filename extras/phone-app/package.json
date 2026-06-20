@@ -1,0 +1,12 @@
+{
+  "name": "mistmaker-relay",
+  "private": true,
+  "description": "Cloudflare Worker relay + phone web app for the Programmable Mist Maker",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
