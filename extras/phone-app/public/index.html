@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#58c4e0">
 <title>Mist Control · ByProduct Lab</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Inter:wght@400;500;600;700&family=Knewave&display=swap" rel="stylesheet">
@@ -29,7 +30,7 @@
     <div class="level"><b id="levelBig">0</b><span>%</span></div>
     <div class="puffs" id="puffs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
     <div class="targetline">
-      sending to <select id="target" class="sel"><option value="all">every maker</option></select>
+      sending to <select id="target" class="sel" aria-label="Which makers to send to"><option value="all">every maker</option></select>
     </div>
     <button id="engage" class="btn big">Start misting</button>
     <div class="hint" id="hint">Pick who to send to, then tap Start — or just slide below.</div>
@@ -38,7 +39,7 @@
   <!-- ☁ MANUAL ☁ the always-there slider -->
   <section class="card">
     <div class="phead"><h2>Slide it</h2><div class="pval" id="manualVal">30%</div></div>
-    <input type="range" id="manual" class="slider" min="0" max="100" value="30">
+    <input type="range" id="manual" class="slider" min="0" max="100" value="30" aria-label="Mist level">
     <div class="ticks"><span>off</span><span>gentle</span><span>full</span></div>
   </section>
 
@@ -60,7 +61,7 @@
       <canvas id="bands" class="bands" hidden></canvas>
       <div class="srow">
         <label>sensitivity</label>
-        <input type="range" id="gain" class="slider thin" min="1" max="100" value="50">
+        <input type="range" id="gain" class="slider thin" min="1" max="100" value="50" aria-label="Sensitivity">
       </div>
       <div class="srow" id="invertRow" hidden>
         <label id="invLbl">flip it</label>
@@ -80,7 +81,7 @@
     </div>
     <div class="phasectl srow" id="phaseCtl" hidden>
       <label>spread</label>
-      <input type="range" id="spread" class="slider thin" min="0" max="100" value="60">
+      <input type="range" id="spread" class="slider thin" min="0" max="100" value="60" aria-label="Wave spread">
     </div>
     <ul class="devs" id="devs"><li class="empty">No makers yet — flash one &amp; power it on ☁</li></ul>
   </section>

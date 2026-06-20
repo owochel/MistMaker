@@ -20,6 +20,9 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* keep the HTML `hidden` attribute authoritative over the display rules below
+   (a class's `display` otherwise overrides the default [hidden]{display:none}) */
+[hidden] { display: none !important; }
 
 html { background: var(--f5); }
 
@@ -67,6 +70,15 @@ body {
   padding: 18px 4px 14px;
   position: sticky; top: 0; z-index: 5;
 }
+/* subtle frosted scrim so cards stay readable as they scroll under the header;
+   masked to fade out downward — no hard edge, header content stays crisp above */
+.bar::before {
+  content: ""; position: absolute; inset: -2px -16px -20px; z-index: -1; pointer-events: none;
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  background: linear-gradient(180deg, rgb(123 205 232 / .42), rgb(123 205 232 / 0));
+  -webkit-mask-image: linear-gradient(180deg, #000 52%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 52%, transparent 100%);
+}
 .mark {
   font-family: var(--font-display); font-size: 1.25rem; color: var(--mist);
   display: flex; align-items: center; gap: 7px; margin-right: auto;
@@ -106,10 +118,10 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 
 /* ── hero ────────────────────────────────────────────────────────────── */
 .hero { text-align: center; padding-top: 18px; }
-.level { font-family: var(--font-display); color: var(--ink); line-height: .9; margin: 4px 0 2px; }
+.level { font-family: var(--font-display); color: var(--ink); line-height: 1; margin: 4px 0 16px; }
 .level b { font-size: 5.4rem; font-weight: 400; }
-.level span { font-size: 2rem; opacity: .55; }
-.puffs { display: flex; justify-content: center; gap: 8px; height: 16px; margin-bottom: 14px; }
+.level span { font-size: 2rem; opacity: .55; margin-left: 2px; }
+.puffs { display: flex; justify-content: center; gap: 9px; height: 14px; margin: 0 0 18px; }
 .puffs i {
   width: 12px; height: 12px; border-radius: 50%;
   background: var(--f4); opacity: .25; transition: opacity .25s, transform .25s;
