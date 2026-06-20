@@ -18,6 +18,9 @@
 // control, different rooms are isolated. Default "workshop" on both the board
 // and the app, so it just works; pick a secret room for a private session.
 //
+// BUTTON: press the board button any time to toggle a local 30% mist — works
+// even with no WiFi/cloud, and the change syncs to the app's status.
+//
 // Why the cloud and not the board's own page for the demo? Phone sensors
 // (mic/motion/camera) only work on an HTTPS "secure" page, which the board
 // can't serve over its AP. Hosting the app on Cloudflare gives every phone
@@ -48,7 +51,8 @@ MistMaker mist(MistMakerBatteryKitV03());
 const char* RELAY_HOST = "mistcontrol.byproductlab.com"; // no https://, no path
 const uint16_t RELAY_PORT = 443;
 const char* DEFAULT_ROOM = "workshop";    // a room groups makers + phones that share control
-const int SETUP_BTN = D6;                 // hold at power-on to re-run WiFi setup
+const int BUTTON = D6;                    // press = mist on/off; hold at power-on = re-run WiFi setup
+const uint8_t BUTTON_LEVEL = 30;          // mist % the board button toggles to
 
 Preferences prefs;
 DNSServer dns;                             // captive portal: resolves every host to the board
@@ -58,6 +62,9 @@ String ssid, pass, room;
 char deviceId[5];                          // last 2 bytes of MAC, e.g. "A4F1" (addressing key)
 char deviceName[33];                       // friendly label shown in the app (default "Mist-A4F1")
 uint8_t level = 0;                         // current mist level 0-100
+bool localOn = false;                      // mist toggled on by the board button (works offline)
+bool btnPrev = false;                      // button edge-detect
+unsigned long btnMs = 0;                   // button debounce
 bool portalMode = false;                   // true while serving the setup page
 unsigned long lastTick = 0, lastCmd = 0, lastProbe = 0;
 const unsigned long CMD_TIMEOUT = 6000;    // mist off if no command this long
@@ -207,20 +214,36 @@ void onCommand(const char* msg) {
       forMe = !strncmp(tgt, "all\"", 4) || (!strncmp(tgt, deviceId, n) && tgt[n] == '"');
     }
     const char* lv = strstr(msg, "\"level\":");
-    if (forMe && lv) { lastCmd = millis(); applyLevel(atoi(lv + 8)); }
+    if (forMe && lv) { lastCmd = millis(); localOn = false; applyLevel(atoi(lv + 8)); }
   } else if (strstr(msg, "\"t\":\"multi\"")) {
     char key[10];
     snprintf(key, sizeof(key), "\"%s\":", deviceId);
     const char* p = strstr(msg, key);
-    if (p) { lastCmd = millis(); applyLevel(atoi(p + strlen(key))); }
+    if (p) { lastCmd = millis(); localOn = false; applyLevel(atoi(p + strlen(key))); }
   }
+}
+
+// Board button: toggle a local mist any time (works even with no cloud).
+// Last-writer-wins — a phone command takes over, and a press takes over the phone.
+void pollButton() {
+  bool b = digitalRead(BUTTON) == HIGH;            // active-HIGH (PCB pull-down)
+  if (b && !btnPrev && millis() - btnMs > 250) {   // debounced press
+    btnMs = millis();
+    localOn = !localOn;
+    applyLevel(localOn ? BUTTON_LEVEL : 0);
+    lastCmd = millis();                            // exempt from the command watchdog
+    Serial.printf("[BUTTON] mist %s\n", localOn ? "ON" : "OFF");
+    if (ws.isConnected()) sendStatus();            // sync to the app immediately
+  }
+  btnPrev = b;
 }
 
 void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
   switch (type) {
     case WStype_CONNECTED:    Serial.println("[WS] connected — control me from the app"); break;
-    case WStype_DISCONNECTED: Serial.println("[WS] disconnected — mist off, retrying");
-                              applyLevel(0); break;
+    case WStype_DISCONNECTED: Serial.println("[WS] disconnected — retrying");
+                              if (!localOn) applyLevel(0);  // keep a button-toggled mist running offline
+                              break;
     case WStype_ERROR:        Serial.println("[WS] error"); break;
     case WStype_TEXT:         onCommand((const char*)payload); break;
     default: break;
@@ -258,7 +281,7 @@ void setup() {
   delay(500);
   mist.disableBattery();   // V0.3 D1 can't tell USB from battery — re-add at V0.4
   mist.begin();
-  pinMode(SETUP_BTN, INPUT);
+  pinMode(BUTTON, INPUT);
 
   uint8_t mac[6];
   WiFi.mode(WIFI_STA);                              // init WiFi first so the MAC reads real (not 0000)
@@ -278,7 +301,7 @@ void setup() {
 
   // No saved WiFi, or button held at boot -> run the setup portal. Otherwise
   // connect (and fall back to the portal if the saved WiFi won't connect).
-  if (ssid.isEmpty() || digitalRead(SETUP_BTN) == HIGH) startPortal();
+  if (ssid.isEmpty() || digitalRead(BUTTON) == HIGH) startPortal();
   else startCloud();
 }
 
@@ -286,10 +309,12 @@ void loop() {
   if (portalMode) { dns.processNextRequest(); portal.handleClient(); return; }
 
   ws.loop();
+  pollButton();   // board button toggles a local mist any time
 
   // Fail-safe: a healthy link refreshes lastCmd every ~2 s (phone keepalive);
-  // silence past CMD_TIMEOUT means the link dropped — cut the mist.
-  if (level > 0 && millis() - lastCmd > CMD_TIMEOUT) {
+  // silence past CMD_TIMEOUT means the link dropped — cut phone-driven mist.
+  // A button-toggled mist is local control, so it's exempt.
+  if (!localOn && level > 0 && millis() - lastCmd > CMD_TIMEOUT) {
     Serial.println("[WATCHDOG] no commands — mist off");
     applyLevel(0);
   }
