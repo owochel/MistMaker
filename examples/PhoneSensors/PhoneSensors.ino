@@ -48,8 +48,8 @@ Preferences prefs;
 WebServer portal(80);
 WebSocketsClient ws;
 String ssid, pass;
-char deviceId[5];                          // last 2 bytes of MAC, e.g. "A4F1"
-char deviceName[20];                       // "Mist-A4F1"
+char deviceId[5];                          // last 2 bytes of MAC, e.g. "A4F1" (addressing key)
+char deviceName[33];                       // friendly label shown in the app (default "Mist-A4F1")
 uint8_t level = 0;                         // current mist level 0-100
 bool portalMode = false;                   // true while serving the setup page
 unsigned long lastTick = 0, lastCmd = 0, lastProbe = 0;
@@ -63,6 +63,17 @@ const char* waterName(MistSenseState s) {
     case MIST_DISC_DISCONNECTED: return "disconnected";
     default:                     return "unknown";
   }
+}
+
+// percent-encode for the WebSocket query string (a custom name/room may have spaces)
+String urlEncode(const char* s) {
+  String o; char b[4];
+  for (const char* p = s; *p; p++) {
+    char c = *p;
+    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.') o += c;
+    else { snprintf(b, sizeof(b), "%%%02X", (uint8_t)c); o += b; }
+  }
+  return o;
 }
 
 // 0-100 percentage; the library caps real PWM duty at 50%, so 100 = full mist.
@@ -91,6 +102,8 @@ const char SETUP_PAGE[] PROGMEM = R"HTML(
 <p>Connect this maker to the workshop WiFi, then Save. Tap Test to check the mist first.</p>
 <button class="test" id="t" onclick="test()">&#128168; Test mist (30%)</button>
 <form method="POST" action="/save">
+ <label>Name this maker (optional)</label>
+ <input name="name" id="name" autocomplete="off" maxlength="32" placeholder="e.g. Left, Center, Stage-1">
  <label>WiFi network</label>
  <input name="ssid" list="nets" id="ssid" autocomplete="off" required>
  <datalist id="nets"></datalist>
@@ -98,10 +111,13 @@ const char SETUP_PAGE[] PROGMEM = R"HTML(
  <input name="pass" type="password" autocomplete="off">
  <button class="save">Save &amp; connect</button>
 </form>
+<p style="font-size:.74rem;color:#3a6b7e;margin:10px 0 0">ID <b id="id">&mdash;</b> &middot; the name above is what the app's "sending to" list shows.</p>
 </div><script>
 let on=false;
 function test(){on=!on;fetch('/test?on='+(on?1:0));let b=document.getElementById('t');
  b.classList.toggle('on',on);b.textContent=on?'■ Stop test':'💨 Test mist (30%)';}
+fetch('/info').then(r=>r.json()).then(d=>{document.getElementById('name').value=d.name;
+ document.getElementById('id').textContent=d.id;}).catch(()=>{});
 fetch('/scan').then(r=>r.json()).then(a=>{document.getElementById('nets').innerHTML=
  a.map(s=>'<option value="'+s.replace(/"/g,'')+'">').join('');}).catch(()=>{});
 </script></body></html>
@@ -118,10 +134,16 @@ void handleTest() {
   applyLevel(portal.arg("on") == "1" ? 30 : 0);   // local hardware check, no cloud
   portal.send(200, "text/plain", "ok");
 }
+void handleInfo() {                                // current id + effective name (prefills the page)
+  char buf[64];
+  snprintf(buf, sizeof(buf), "{\"id\":\"%s\",\"name\":\"%s\"}", deviceId, deviceName);
+  portal.send(200, "application/json", buf);
+}
 void handleSave() {
   ssid = portal.arg("ssid"); pass = portal.arg("pass");
   prefs.putString("ssid", ssid);
   prefs.putString("pass", pass);
+  prefs.putString("name", portal.arg("name"));   // friendly label (blank = keep Mist-XXXX)
   applyLevel(0);
   portal.send(200, "text/html",
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -142,6 +164,7 @@ void startPortal() {
   portal.on("/", []() { portal.send_P(200, "text/html", SETUP_PAGE); });
   portal.on("/scan", handleScan);
   portal.on("/test", handleTest);
+  portal.on("/info", handleInfo);
   portal.on("/save", HTTP_POST, handleSave);
   portal.begin();
   Serial.printf("[SETUP] join WiFi \"%s\" and open http://192.168.4.1\n", ap);
@@ -202,9 +225,9 @@ void startCloud() {
   }
   Serial.printf(" ok — ip %s, rssi %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
 
-  char path[120];
+  char path[160];
   snprintf(path, sizeof(path), "/ws?room=%s&role=device&id=%s&name=%s",
-           ROOM, deviceId, deviceName);
+           urlEncode(ROOM).c_str(), deviceId, urlEncode(deviceName).c_str());
   ws.beginSSL(RELAY_HOST, RELAY_PORT, path);
   ws.onEvent(onWsEvent);
   ws.setReconnectInterval(3000);
@@ -225,12 +248,14 @@ void setup() {
   snprintf(deviceId,   sizeof(deviceId),   "%02X%02X", mac[4], mac[5]);
   snprintf(deviceName, sizeof(deviceName), "Mist-%s", deviceId);
 
-  Serial.println();
-  Serial.printf("==== %s  (room: %s, relay: %s) ====\n", deviceName, ROOM, RELAY_HOST);
-
   prefs.begin("mistwifi", false);
   ssid = prefs.getString("ssid", "");
   pass = prefs.getString("pass", "");
+  String nm = prefs.getString("name", "");          // optional friendly label
+  if (nm.length()) nm.toCharArray(deviceName, sizeof(deviceName));
+
+  Serial.println();
+  Serial.printf("==== %s  (id: %s, room: %s, relay: %s) ====\n", deviceName, deviceId, ROOM, RELAY_HOST);
 
   // No saved WiFi, or button held at boot -> run the setup portal. Otherwise
   // connect (and fall back to the portal if the saved WiFi won't connect).
