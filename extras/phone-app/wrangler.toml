@@ -12,9 +12,14 @@ name = "mistmaker-relay"
 main = "src/worker.js"
 compatibility_date = "2025-01-01"
 
-# Custom domain (optional). If your domain's zone is in the same Cloudflare
-# account, uncomment this and `wrangler deploy` creates the DNS record + TLS
-# cert for you. Change it to YOUR domain before deploying.
+# Custom domain. Recommended: leave the routes block below COMMENTED and add the
+# domain once in the dashboard (Workers & Pages -> this Worker -> Settings ->
+# Domains & Routes -> Add -> Custom Domain). With no `routes` key here, wrangler
+# never reconciles routing, so future `wrangler deploy` runs won't drop it.
+#
+# Prefer code? Uncomment the block (change it to YOUR domain, whose zone is in
+# the same account) and `wrangler deploy` creates the DNS + TLS cert. Then keep
+# it uncommented so redeploys re-assert it.
 # routes = [
 #   { pattern = "mistcontrol.byproductlab.com", custom_domain = true }
 # ]
