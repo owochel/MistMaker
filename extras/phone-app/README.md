@@ -36,6 +36,11 @@ phones. That's the whole thing — about 70 lines in `src/worker.js`.
 One Worker does **both** jobs: serves this web app **and** runs the room. So you
 deploy once and get one URL.
 
+> **Access:** the room is open — anyone with your URL **and** the room name can
+> join and drive the makers. That's fine for a public workshop; for a private
+> session, change the room name (top-right ☁ chip) to something non-obvious. No
+> data is stored and nothing is logged — the Worker only passes messages through.
+
 ---
 
 ## Part A — deploy the relay + app to Cloudflare (one time, ~10 min)

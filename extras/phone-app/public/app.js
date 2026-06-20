@@ -15,7 +15,7 @@ const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmark
 const VISION_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.20";
 
 // ───────────────────────── state ─────────────────────────
-let ws, room, running = false;
+let ws, room, running = false, reconnectTimer = 0, modeGen = 0, audioCtx = null;
 let source = null;          // active input: null (manual) or a sensor object
 let energy = 0;             // current 0-100 from the active source
 let bands = null;           // audio mode: per-band 0-100 array
@@ -27,7 +27,7 @@ let lastSendAt = 0, lastKeepAlive = 0, waveT = 0;
 // ───────────────────────── dom ─────────────────────────
 const $ = (id) => document.getElementById(id);
 const connEl=$("conn"), connTxt=$("connTxt"), roomName=$("roomName");
-const levelBig=$("levelBig"), targetSel=$("target"), engage=$("engage"), hint=$("hint");
+const levelBig=$("levelBig"), targetSel=$("target"), engage=$("engage");
 const manual=$("manual"), manualVal=$("manualVal");
 const modesEl=$("modes"), modePill=$("modePill"), sensorEl=$("sensor");
 const meterFill=$("meterFill"), meterTxt=$("meterTxt"), cam=$("cam"), bandsCv=$("bands");
@@ -37,6 +37,8 @@ const devsEl=$("devs"), devCount=$("devCount"), puffs=$("puffs");
 
 // ───────────────────────── connection ─────────────────────────
 function connect() {
+  clearTimeout(reconnectTimer);
+  if (ws) { ws.onclose = ws.onerror = null; try { ws.close(); } catch {} }  // drop any old socket cleanly
   room = new URL(location).searchParams.get("room")
        || localStorage.getItem("mm_room") || "workshop";
   roomName.textContent = room;
@@ -44,10 +46,20 @@ function connect() {
   setConn("…", "saying hi…");
   ws = new WebSocket(url);
   ws.onopen    = () => setConn("ok", "connected");
-  ws.onclose   = () => { setConn("off", "reconnecting…"); setTimeout(connect, 2000); };
-  ws.onerror   = () => ws.close();
+  ws.onclose   = () => { setConn("off", "reconnecting…"); reconnectTimer = setTimeout(connect, 2000); };
+  ws.onerror   = () => { try { ws.close(); } catch {} };
   ws.onmessage = (e) => onMessage(e.data);
 }
+
+// One shared AudioContext for mic + music modes. iOS only unlocks audio inside a
+// user gesture, so we create/resume it on the tap (and on any later gesture).
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+["pointerdown", "touchend"].forEach(ev => addEventListener(ev,
+  () => { if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); }, { passive: true }));
 function setConn(cls, txt) { connEl.className = "conn " + cls; connTxt.textContent = txt; }
 
 function onMessage(raw) {
@@ -66,17 +78,18 @@ function isNew(key, val) {
 }
 
 function dispatch() {
+  if (!ws || ws.readyState !== 1) return;             // don't book-keep sends that can't leave
   const now = performance.now();
   if (now - lastSendAt < MIN_INTERVAL) return;
   const force = now - lastKeepAlive > KEEPALIVE_MS;   // periodic anti-drift resend
 
-  if (route === "sync" || makers.length < 2) {
+  if (route === "sync" || makers.length < 2 || (route === "spectrum" && !bands)) {
     const lvl = Math.round(energy), tgt = targetSel.value;
     const key = "s:" + tgt;
     if (force || isNew(key, lvl)) { wsSend({ t: "set", target: tgt, level: lvl }); seen.set(key, lvl); lastSendAt = now; }
   } else {
     const levels = {};
-    if (route === "spectrum" && bands) {
+    if (route === "spectrum") {   // bands present here (the null case fell into sync above)
       makers.forEach((d, i) => levels[d.id] = Math.round(bands[i % bands.length] || 0));
     } else { // phase: a traveling wave scaled by the input energy
       const sp = (spread.value / 100) * Math.PI;
@@ -97,6 +110,7 @@ function setRoster(list) {
   const ids = new Set(list.map(d => d.id));
   for (let i = makers.length - 1; i >= 0; i--) if (!ids.has(makers[i].id)) makers.splice(i, 1);
   for (const d of list) if (!makers.find(m => m.id === d.id)) makers.push({ ...d, level: 0, current_ma: 0, water: "?", rssi: 0 });
+  seen.clear();                                // forget send-history of any departed makers
   renderTargets(); renderDevs(); routeEl.hidden = makers.length < 2;
 }
 function updateMaker(m) {
@@ -146,11 +160,10 @@ const Manual = {
 
 function micAnalyser(fftSize) {
   return navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    ctx.resume();
+    const ctx = getAudioCtx();                 // shared, unlocked on the tap gesture (iOS)
     const an = ctx.createAnalyser(); an.fftSize = fftSize;
     ctx.createMediaStreamSource(stream).connect(an);
-    return { ctx, an, stream };
+    return { an, stream };                      // no ctx → teardown keeps the shared ctx alive
   });
 }
 
@@ -250,8 +263,8 @@ const Audio = {
   async start() {
     this.a = await micAnalyser(256); this.buf = new Uint8Array(this.a.an.frequencyBinCount);
     bandsCv.hidden = false; this.ctx2d = bandsCv.getContext("2d");
-    bandsCv.width = bandsCv.clientWidth * devicePixelRatio; bandsCv.height = 70 * devicePixelRatio;
-    if (makers.length >= 2) setRoute("spectrum");
+    bandsCv.width = (bandsCv.clientWidth || 320) * devicePixelRatio; bandsCv.height = 70 * devicePixelRatio;
+    if (makers.length >= 2) { this.prevRoute = route; setRoute("spectrum"); }
   },
   read() {
     if (!this.a) return;
@@ -268,7 +281,8 @@ const Audio = {
     energy = out.reduce((p, c) => p + c, 0) / N;
     drawBands(this.ctx2d, out);
   },
-  stop() { teardown(this.a); this.a = null; bands = null; bandsCv.hidden = true; },
+  stop() { teardown(this.a); this.a = null; bands = null; bandsCv.hidden = true;
+           if (this.prevRoute) { setRoute(this.prevRoute); this.prevRoute = null; } },
 };
 
 const SOURCES = { mic: Mic, light: Light, motion: Motion, face: Face, audio: Audio };
@@ -290,19 +304,24 @@ function drawBands(cx, arr) {
 async function selectMode(key) {
   const next = SOURCES[key];
   if (source === next) return setManual();          // tapping the active mode → back to slider
+  const myGen = ++modeGen;                            // cancel-token: the newest tap wins
+  if (key === "mic" || key === "audio") getAudioCtx(); // unlock audio inside this tap (iOS)
   if (source) source.stop();
+  source = next;                                      // tick reads it; each read() self-guards until ready
   // reset per-mode UI
   invertRow.hidden = true; bandsCv.hidden = true; sensorHint.textContent = "";
   inverted = false; invertBtn.setAttribute("aria-checked", "false");
+  sensorEl.hidden = false;
+  [...modesEl.children].forEach(b => b.classList.toggle("on", b.dataset.mode === key));
+  modePill.textContent = next.name;
+  if (next.invert) { invertRow.hidden = false; invLbl.textContent = next.invLabel || "invert"; }
   try {
-    source = next; sensorEl.hidden = false;
-    [...modesEl.children].forEach(b => b.classList.toggle("on", b.dataset.mode === key));
-    modePill.textContent = next.name;
-    if (next.invert) { invertRow.hidden = false; invLbl.textContent = next.invLabel || "invert"; }
     await next.start();
+    if (myGen !== modeGen) { next.stop(); return; }   // a newer mode took over mid-start → clean up
     sensorHint.textContent = next.hint || "";
-    running = true; setEngage();                     // auto-start so it "just works"
+    running = true; setEngage();                      // auto-start so it "just works"
   } catch (err) {
+    if (myGen !== modeGen) return;                     // superseded; the newer call owns the UI
     sensorHint.textContent = "⚠ " + (err.message || "Couldn't start that sensor.");
     setManual();
   }
@@ -340,7 +359,7 @@ $("roomSave").onclick = (e) => {
   const v = $("roomInput").value.trim(); if (!v) return;
   localStorage.setItem("mm_room", v);
   const u = new URL(location); u.searchParams.set("room", v); history.replaceState(0, "", u);
-  if (ws) ws.close(); connect();
+  connect();                                          // connect() cleanly drops the old socket + timer
 };
 
 function setFill(el) { el.style.setProperty("--fill", ((el.value - el.min) / (el.max - el.min) * 100) + "%"); }

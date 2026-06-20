@@ -57,13 +57,14 @@ export class Room {
   }
 
   // Phones need the live list of mist makers to map sensors → devices.
-  broadcastRoster() {
-    const devices = this.peers("device").map((ws) => {
-      const m = this.meta(ws);
-      return { id: m.id, name: m.name };
-    });
+  // `except` = a socket that's closing (getWebSockets() still lists it during
+  // webSocketClose) — drop it so a departed maker doesn't linger in the roster.
+  broadcastRoster(except) {
+    const devices = this.peers("device")
+      .filter((ws) => ws !== except)
+      .map((ws) => { const m = this.meta(ws); return { id: m.id, name: m.name }; });
     const msg = JSON.stringify({ t: "roster", devices });
-    for (const ws of this.peers("phone")) this.t(ws, msg);
+    for (const ws of this.peers("phone")) if (ws !== except) this.t(ws, msg);
   }
 
   async webSocketMessage(ws, raw) {
@@ -84,8 +85,8 @@ export class Room {
     }
   }
 
-  async webSocketClose(ws) { this.broadcastRoster(); }
-  async webSocketError(ws) { this.broadcastRoster(); }
+  async webSocketClose(ws) { this.broadcastRoster(ws); }
+  async webSocketError(ws) { this.broadcastRoster(ws); }
 
   // send, ignoring sockets that have already gone away
   t(ws, msg) {

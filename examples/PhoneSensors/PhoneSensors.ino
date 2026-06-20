@@ -42,7 +42,7 @@ const char* WIFI_SSID  = "your-wifi";
 const char* WIFI_PASS  = "your-password";
 const char* RELAY_HOST = "mistmaker-relay.YOURNAME.workers.dev"; // no https://, no path
 const uint16_t RELAY_PORT = 443;
-const char* ROOM = "workshop";            // any phone in the same room controls this maker
+const char* ROOM = "workshop";            // any phone in this room controls this maker (letters/numbers only)
 
 WebSocketsClient ws;
 char deviceId[5];                          // last 2 bytes of MAC, e.g. "A4F1"
@@ -82,16 +82,18 @@ void sendStatus() {
 //   {"t":"set","target":"all"|"<id>","level":NN}   one or all makers
 //   {"t":"multi","levels":{"<id>":NN,...}}         a different level per maker
 void onCommand(const char* msg) {
-  if (strstr(msg, "\"set\"")) {
+  if (strstr(msg, "\"t\":\"set\"")) {
     const char* tgt = strstr(msg, "\"target\":\"");
     bool forMe = !tgt;                                  // no target = everyone
     if (tgt) {
-      tgt += 10;
-      forMe = !strncmp(tgt, "all\"", 4) || !strncmp(tgt, deviceId, strlen(deviceId));
+      tgt += 10;                                        // step over: "target":"
+      const size_t n = strlen(deviceId);
+      forMe = !strncmp(tgt, "all\"", 4) ||
+              (!strncmp(tgt, deviceId, n) && tgt[n] == '"');  // exact id, not a prefix
     }
     const char* lv = strstr(msg, "\"level\":");
     if (forMe && lv) applyLevel(atoi(lv + 8));
-  } else if (strstr(msg, "\"multi\"")) {
+  } else if (strstr(msg, "\"t\":\"multi\"")) {
     char key[10];
     snprintf(key, sizeof(key), "\"%s\":", deviceId);    // find "A4F1":NN
     const char* p = strstr(msg, key);
@@ -137,7 +139,11 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.printf("[WiFi] joining \"%s\"", WIFI_SSID);
-  while (WiFi.status() != WL_CONNECTED) { delay(300); Serial.print("."); }
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(300); Serial.print(".");
+    if (millis() - t0 > 20000) { Serial.println(" timeout — restarting"); ESP.restart(); }
+  }
   Serial.printf(" ok — ip %s, rssi %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
 
   // Join the room as a device. beginSSL with no cert = TLS without certificate
