@@ -108,6 +108,13 @@ if (mist.batteryCritical()) {          // hysteresis built in
 Defaults: divider ratio 2.0, low = 3.45 V, critical = 3.20 V. Override with
 `setBatteryDivider()` / `setBatteryThresholds()`.
 
+> ⚠️ **Battery Kit V0.3:** the D1 divider reads `BATT+`, but the TPS2116 power
+> mux means the board runs off USB-C whenever it's plugged in — so D1 can't tell
+> "USB-only, no cell" from "on battery, dying," which caused false low-battery
+> shutdowns. Until V0.4 adds a USB-present pin, call `mist.disableBattery();`
+> before `begin()` to switch battery sensing off (every `battery*` call then
+> behaves as on a board with no cell). The networked examples already do this.
+
 ---
 
 ## 📚 Examples
@@ -117,7 +124,8 @@ Defaults: divider ratio 2.0, low = 3.45 V, critical = 3.20 V. Override with
 | `MistBlink` | Hello-world: 6 s ON / 3 s OFF cycle |
 | `MistDimming` | Organic "breathing" mist with `setLevel()` |
 | `WaterDetect` | Disc + water detection, auto-calibration, auto-recovery |
-| `WiFiPhoneControl` | Phone control via WiFi AP + web UI, graceful low-battery shutdown |
+| `WiFiPhoneControl` | Phone control via the board's own WiFi AP + web UI |
+| `PhoneSensors` | Drive the mist from a phone's mic/light/motion/face/music via a Cloudflare relay; sync many makers ([extras/phone-app](extras/phone-app)) |
 | `HomeAssistant_MQTT` | Native Home Assistant device via MQTT Discovery |
 | `Blink`, `SimpleControl`, `Ramping` | v1.0 basics (button toggle, level ramp) |
 | `ESPNow_Control` | Show-control via ESP-NOW (no router needed) |

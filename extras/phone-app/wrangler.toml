@@ -1,0 +1,29 @@
+# Cloudflare Worker config for the Mist Maker phone-sensor relay.
+#
+# This one Worker does TWO jobs:
+#   1. Serves the phone web app (the files in ./public) over HTTPS.
+#   2. Runs a WebSocket "room" (the Durable Object below) that passes messages
+#      between your phone and your mist makers — like an MQTT broker, but built
+#      into Cloudflare so there's no extra service to sign up for.
+#
+# Deploy:  npx wrangler deploy      (see README.md for the full walkthrough)
+
+name = "mistmaker-relay"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+# The web app — served as static files straight from Cloudflare's edge.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# The "room" where phone + mist makers meet. One instance per room name.
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+# Durable Objects must be declared once via a migration. SQLite-backed classes
+# work on the free plan (we don't store anything — the room is just a relay).
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

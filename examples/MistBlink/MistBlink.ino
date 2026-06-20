@@ -23,6 +23,7 @@ const unsigned long OFF_TIME_MS = 3000;
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  mist.disableBattery();   // V0.3 D1 can't tell USB from battery — re-add at V0.4
   mist.begin();
   Serial.println("MistBlink: 6 s ON / 3 s OFF");
 }
