@@ -27,6 +27,7 @@ jobs:
           libraries: |
             - source-path: ./        # this library
             - name: PubSubClient     # HomeAssistant_MQTT example
+            - name: WebSockets       # PhoneSensors example (Markus Sattler)
           sketch-paths: |
             - examples
           enable-warnings-report: true

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#58c4e0">
+<title>Mist Control · ByProduct Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Inter:wght@400;500;600;700&family=Knewave&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<!-- dreamy sky field + drifting clouds + film grain (pure CSS, matches the shop) -->
+<div class="sky" aria-hidden="true"></div>
+<div class="clouds" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="bar">
+  <div class="mark"><svg class="cloud-ico" viewBox="0 0 24 24"><path d="M7 18h9a4 4 0 0 0 .4-8A5.5 5.5 0 0 0 6 9.3 3.8 3.8 0 0 0 7 18Z"/></svg>Mist&nbsp;Control</div>
+  <button class="chip" id="roomBtn" title="Change room">☁ <b id="roomName">workshop</b></button>
+  <div class="conn" id="conn"><i></i><span id="connTxt">saying hi…</span></div>
+</header>
+
+<main>
+  <!-- ☁ the live hero: what the mist is doing right now ☁ -->
+  <section class="card hero">
+    <div class="eyebrow">now misting</div>
+    <div class="level"><b id="levelBig">0</b><span>%</span></div>
+    <div class="puffs" id="puffs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="targetline">
+      sending to <select id="target" class="sel"><option value="all">every maker</option></select>
+    </div>
+    <button id="engage" class="btn big">Start misting</button>
+    <div class="hint" id="hint">Pick who to send to, then tap Start — or just slide below.</div>
+  </section>
+
+  <!-- ☁ MANUAL ☁ the always-there slider -->
+  <section class="card">
+    <div class="phead"><h2>Slide it</h2><div class="pval" id="manualVal">30%</div></div>
+    <input type="range" id="manual" class="slider" min="0" max="100" value="30">
+    <div class="ticks"><span>off</span><span>gentle</span><span>full</span></div>
+  </section>
+
+  <!-- ☁ SENSE ☁ phone senses → mist -->
+  <section class="card">
+    <div class="phead"><h2>Play with it</h2><div class="pill" id="modePill">slider</div></div>
+    <div class="modes" id="modes">
+      <button data-mode="mic"    class="mode"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><b>Mic</b><small>blow on it!</small></button>
+      <button data-mode="light"  class="mode"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg><b>Light</b><small>cover the cam</small></button>
+      <button data-mode="motion" class="mode"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 6v6l3 2"/></svg><b>Tilt</b><small>lean &amp; shake</small></button>
+      <button data-mode="face"   class="mode"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 14a5 5 0 0 0 8 0"/></svg><b>Face</b><small>open wide</small></button>
+      <button data-mode="audio"  class="mode"><svg viewBox="0 0 24 24"><path d="M4 12v0M8 8v8M12 5v14M16 9v6M20 11v2"/></svg><b>Music</b><small>visualizer</small></button>
+    </div>
+
+    <!-- live sense readout + mapping, shown when a mode is on -->
+    <div class="sensor" id="sensor" hidden>
+      <div class="meter"><i id="meterFill"></i><b id="meterTxt">—</b></div>
+      <video id="cam" playsinline muted hidden></video>
+      <canvas id="bands" class="bands" hidden></canvas>
+      <div class="srow">
+        <label>sensitivity</label>
+        <input type="range" id="gain" class="slider thin" min="1" max="100" value="50">
+      </div>
+      <div class="srow" id="invertRow" hidden>
+        <label id="invLbl">flip it</label>
+        <button id="invert" class="toggle" role="switch" aria-checked="false"></button>
+      </div>
+      <div class="hint" id="sensorHint"></div>
+    </div>
+  </section>
+
+  <!-- ☁ MAKERS ☁ many makers, one phone -->
+  <section class="card">
+    <div class="phead"><h2>Your makers</h2><div class="pval"><b id="devCount">0</b> online</div></div>
+    <div class="route" id="route" hidden>
+      <button data-route="sync"     class="rbtn on">Together<small>all in sync</small></button>
+      <button data-route="phase"    class="rbtn">Wave<small>ripple / delay</small></button>
+      <button data-route="spectrum" class="rbtn">Spectrum<small>one band each</small></button>
+    </div>
+    <div class="phasectl srow" id="phaseCtl" hidden>
+      <label>spread</label>
+      <input type="range" id="spread" class="slider thin" min="0" max="100" value="60">
+    </div>
+    <ul class="devs" id="devs"><li class="empty">No makers yet — flash one &amp; power it on ☁</li></ul>
+  </section>
+</main>
+
+<footer class="foot">
+  <span class="sig">PMM.BY.DS</span>
+  <span id="budget">runs free on Cloudflare</span>
+</footer>
+
+<!-- room change dialog -->
+<dialog id="roomDlg" class="dlg">
+  <form method="dialog">
+    <h3>Room name</h3>
+    <p>Every phone &amp; maker sharing a room name share control. Pick a secret one for a private session.</p>
+    <input id="roomInput" class="text" autocomplete="off" spellcheck="false">
+    <menu><button value="cancel" class="btn ghost">Cancel</button><button id="roomSave" value="save" class="btn">Join</button></menu>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
