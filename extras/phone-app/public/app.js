@@ -303,8 +303,8 @@ function drawBands(cx, arr) {
 // ───────────────────────── mode switching ─────────────────────────
 async function selectMode(key) {
   const next = SOURCES[key];
-  if (source === next) return setManual();          // tapping the active mode → back to slider
-  const myGen = ++modeGen;                            // cancel-token: the newest tap wins
+  const myGen = ++modeGen;                            // cancel-token first: also cancels an in-flight
+  if (source === next) return setManual();           // start() when toggling the active mode back off
   if (key === "mic" || key === "audio") getAudioCtx(); // unlock audio inside this tap (iOS)
   if (source) source.stop();
   source = next;                                      // tick reads it; each read() self-guards until ready
@@ -322,8 +322,11 @@ async function selectMode(key) {
     running = true; setEngage();                      // auto-start so it "just works"
   } catch (err) {
     if (myGen !== modeGen) return;                     // superseded; the newer call owns the UI
-    sensorHint.textContent = "⚠ " + (err.message || "Couldn't start that sensor.");
-    setManual();
+    source = null; energy = +manual.value;             // fall back to the slider, but…
+    [...modesEl.children].forEach(b => b.classList.remove("on"));
+    modePill.textContent = "slider";
+    sensorEl.hidden = false;                            // …keep the panel up to SHOW why it failed
+    sensorHint.textContent = "⚠ " + (err.message || "Couldn't start that sensor — check the permission prompt.");
   }
 }
 function setManual() {

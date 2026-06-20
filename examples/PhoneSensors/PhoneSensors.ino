@@ -48,7 +48,8 @@ WebSocketsClient ws;
 char deviceId[5];                          // last 2 bytes of MAC, e.g. "A4F1"
 char deviceName[20];                       // "Mist-A4F1" (shown in the app + Serial)
 uint8_t level = 0;                         // current mist level 0-100
-unsigned long lastTick = 0;
+unsigned long lastTick = 0, lastCmd = 0, lastProbe = 0;
+const unsigned long CMD_TIMEOUT = 6000;    // mist off if no command this long (phone keepalive is ~2 s)
 
 const char* waterName(MistSenseState s) {
   switch (s) {
@@ -92,12 +93,12 @@ void onCommand(const char* msg) {
               (!strncmp(tgt, deviceId, n) && tgt[n] == '"');  // exact id, not a prefix
     }
     const char* lv = strstr(msg, "\"level\":");
-    if (forMe && lv) applyLevel(atoi(lv + 8));
+    if (forMe && lv) { lastCmd = millis(); applyLevel(atoi(lv + 8)); }
   } else if (strstr(msg, "\"t\":\"multi\"")) {
     char key[10];
     snprintf(key, sizeof(key), "\"%s\":", deviceId);    // find "A4F1":NN
     const char* p = strstr(msg, key);
-    if (p) applyLevel(atoi(p + strlen(key)));
+    if (p) { lastCmd = millis(); applyLevel(atoi(p + strlen(key))); }
   }
 }
 
@@ -107,7 +108,8 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
       Serial.println("[WS] connected — open the app on your phone to control me");
       break;
     case WStype_DISCONNECTED:
-      Serial.println("[WS] disconnected — will retry every 3 s");
+      Serial.println("[WS] disconnected — mist off, will retry every 3 s");
+      applyLevel(0);                                   // fail-safe: never atomize on a dead link
       break;
     case WStype_ERROR:
       Serial.println("[WS] error");
@@ -162,6 +164,22 @@ void setup() {
 
 void loop() {
   ws.loop();
+
+  // Fail-safe watchdog: a healthy link refreshes lastCmd every ~2 s (the phone's
+  // keepalive), so silence past CMD_TIMEOUT means the phone/relay/WiFi dropped —
+  // cut the mist rather than atomize forever.
+  if (level > 0 && millis() - lastCmd > CMD_TIMEOUT) {
+    Serial.println("[WATCHDOG] no commands — mist off");
+    applyLevel(0);
+  }
+
+  // Re-probe water/disc every 30 s so the app's status stays live, and never
+  // keep driving a missing or disconnected disc.
+  if (millis() - lastProbe > 30000) {
+    lastProbe = millis();
+    MistSenseState s = mist.probe();
+    if (s == MIST_DISC_MISSING || s == MIST_DISC_DISCONNECTED) applyLevel(0);
+  }
 
   // Once a second: report status to the app AND print a Serial heartbeat.
   if (millis() - lastTick > 1000) {
