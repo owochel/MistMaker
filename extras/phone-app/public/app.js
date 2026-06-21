@@ -139,7 +139,7 @@ const WATER = {
 };
 function renderDevs() {
   devCount.textContent = makers.length;
-  if (!makers.length) { devsEl.innerHTML = `<li class="empty">No makers in &ldquo;${esc(room)}&rdquo; yet. Power one on, or set its room to &ldquo;${esc(room)}&rdquo; in its WiFi setup ☁</li>`; renderAlert(0); return; }
+  if (!makers.length) { devsEl.innerHTML = `<li class="empty">No makers in &ldquo;${esc(room)}&rdquo; yet. Power one on, or tap <b>➕ Add a maker</b> below to bring one in by its two words ☁</li>`; renderAlert(0); return; }
   let attention = 0;
   devsEl.innerHTML = makers.map(d => {
     const lvl = clamp(+d.level || 0);
@@ -429,6 +429,56 @@ $("roomBtn").onclick = () => {
   else changeRoom(prompt("Room name. Same name = shared control. Type your maker's two words to control just it.", room));
 };
 $("roomSave").onclick = () => changeRoom($("roomInput").value);
+
+// ── add / claim a maker into THIS room by its printed two words ──
+// We briefly join the board's private room (its words), then send a keyed
+// {t:"room"} command telling it to hop into our current room. No reset/cable.
+const addDlg = $("addDlg"), addInput = $("addInput"), addStatus = $("addStatus");
+const normalizeRoom = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, "-");
+function setAddStatus(msg, ok) {        // ok: true | false | null (in progress)
+  addStatus.innerHTML = (ok === false ? "⚠ " : ok === true ? "✓ " : "") + msg;
+  addStatus.style.color = ok === false ? "#a23b3b" : ok === true ? "#1f7a4d" : "var(--ink-soft)";
+}
+function openAdd() {
+  if (addDlg && typeof addDlg.showModal === "function") {
+    addInput.value = ""; setAddStatus("", null); addDlg.showModal(); setTimeout(() => addInput.focus(), 50);
+  } else {
+    const w = prompt("Type the two words printed on the maker (e.g. fluffy-otter) to bring it into this room:");
+    if (w) addMaker(w);
+  }
+}
+function addMaker(words) {
+  const board = normalizeRoom(words);
+  if (!board) return;
+  const dest = room;                                   // bring it into the room I'm in right now
+  if (board === dest) return setAddStatus("That's already this room — type a maker's own two words.", false);
+  setAddStatus(`Looking for &ldquo;${esc(board)}&rdquo;…`, null);
+  let probe, done = false, sent = 0;
+  const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?room=${encodeURIComponent(board)}&role=phone&name=Adder`;
+  try { probe = new WebSocket(url); } catch { return setAddStatus("Couldn't reach the relay. Try again.", false); }
+  const finish = (msg, ok) => {
+    if (done) return; done = true; clearTimeout(to); try { probe.close(); } catch {}
+    setAddStatus(msg, ok);
+    if (ok) setTimeout(() => { if (addDlg && addDlg.open) addDlg.close(); }, 1600);
+  };
+  const to = setTimeout(() => finish(`No maker &ldquo;${esc(board)}&rdquo; answered. Check the two words (printed on it) and that it's powered on.`, false), 7000);
+  probe.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.t === "roster") {
+      if (sent) return;                                 // send the move once
+      const devs = m.devices || [];
+      if (!devs.length) return;                         // board not joined yet — wait until timeout
+      devs.forEach(d => probe.send(JSON.stringify({ t: "room", id: d.id, key: board, room: dest })));
+      sent = devs.length;
+      setTimeout(() => finish(`Moved ${sent} maker${sent > 1 ? "s" : ""} into &ldquo;${esc(dest)}&rdquo; — appearing below ☁`, true), 800);
+    }
+  };
+  probe.onerror = () => finish("Couldn't reach the relay. Try again.", false);
+}
+$("addBtn").onclick = openAdd;
+$("addGo").onclick = () => addMaker(addInput.value);
+$("addCancel").onclick = () => { if (addDlg && addDlg.open) addDlg.close(); };
+addInput.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addMaker(addInput.value); } };
 
 function setFill(el) { el.style.setProperty("--fill", ((el.value - el.min) / (el.max - el.min) * 100) + "%"); }
 

@@ -223,6 +223,7 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 .dev.bad  { box-shadow: 0 0 0 2px #ff8f8f, 0 3px 9px rgb(12 74 97 / .12); }
 .alert { background: rgb(255 200 49 / .22); color: #8a6200; border-radius: 12px;
   padding: 9px 12px; font-size: .8rem; font-weight: 600; margin-bottom: 12px; line-height: 1.35; }
+.addmaker { margin-top: 14px; }      /* "➕ Add a maker by its words" button */
 
 /* ── footer ──────────────────────────────────────────────────────────── */
 .foot { display: flex; justify-content: space-between; align-items: center; color: var(--mist);

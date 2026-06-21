@@ -88,6 +88,7 @@
       <input type="range" id="spread" class="slider thin" min="0" max="100" value="60" aria-label="Wave spread">
     </div>
     <ul class="devs" id="devs"><li class="empty">No makers yet — flash one &amp; power it on ☁</li></ul>
+    <button id="addBtn" class="btn ghost addmaker">➕ Add a maker by its words</button>
   </section>
 </main>
 
@@ -104,6 +105,15 @@
     <input id="roomInput" class="text" autocomplete="off" spellcheck="false">
     <menu><button value="cancel" class="btn ghost">Cancel</button><button id="roomSave" value="save" class="btn">Join</button></menu>
   </form>
+</dialog>
+
+<!-- add / claim a maker into this room by its printed two words -->
+<dialog id="addDlg" class="dlg">
+  <h3>Add a maker</h3>
+  <p>Type the two words printed on the maker (e.g. <b>fluffy-otter</b>). It hops into <b>this</b> room — no reset, no cable.</p>
+  <input id="addInput" class="text" autocomplete="off" spellcheck="false" placeholder="fluffy-otter">
+  <div class="hint" id="addStatus"></div>
+  <menu><button type="button" id="addCancel" class="btn ghost">Cancel</button><button type="button" id="addGo" class="btn">Add</button></menu>
 </dialog>
 
 <script src="app.js"></script>
