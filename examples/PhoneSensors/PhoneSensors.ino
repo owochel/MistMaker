@@ -15,8 +15,11 @@
 // works before any WiFi/cloud.
 //
 // ROOMS: a room groups the makers a phone controls — same room name = shared
-// control, different rooms are isolated. Default "workshop" on both the board
-// and the app, so it just works; pick a secret room for a private session.
+// control, different rooms are isolated. Each board defaults to its OWN unique
+// two-word room (e.g. "fluffy-otter", printed in setup + Serial) so a fresh
+// board is private — nobody can drive it without knowing its words. For a group,
+// set every board's room to one shared name (e.g. "workshop") in setup; clear
+// the field to go private again.
 //
 // BUTTON: press the board button any time to toggle a local 30% mist — works
 // even with no WiFi/cloud, and the change syncs to the app's status.
@@ -50,7 +53,7 @@ MistMaker mist(MistMakerBatteryKitV03());
 // ---- Your deployed relay (the web app's host) ----
 const char* RELAY_HOST = "mistcontrol.byproductlab.com"; // no https://, no path
 const uint16_t RELAY_PORT = 443;
-const char* DEFAULT_ROOM = "workshop";    // a room groups makers + phones that share control
+const char* SHARED_ROOM_EG = "workshop";  // example shared room for a group (set per board in setup)
 const int BUTTON = D6;                    // press = mist on/off; hold at power-on = re-run WiFi setup
 const uint8_t BUTTON_LEVEL = 30;          // mist % the board button toggles to
 
@@ -60,7 +63,9 @@ WebServer portal(80);
 WebSocketsClient ws;
 String ssid, pass, room;
 char deviceId[5];                          // last 2 bytes of MAC, e.g. "A4F1" (addressing key)
-char deviceName[33];                       // friendly label shown in the app (default "Mist-A4F1")
+char deviceName[33];                       // friendly label shown in the app (default = the private name)
+char privateRoom[40];                      // unique per-board room, e.g. "fluffy-otter" (private by default)
+char privateName[40];                      // same words Title-cased, e.g. "Fluffy Otter" (default name)
 uint8_t level = 0;                         // current mist level 0-100
 bool localOn = false;                      // mist toggled on by the board button (works offline)
 bool btnPrev = false;                      // button edge-detect
@@ -68,6 +73,39 @@ unsigned long btnMs = 0;                   // button debounce
 bool portalMode = false;                   // true while serving the setup page
 unsigned long lastTick = 0, lastCmd = 0, lastProbe = 0;
 const unsigned long CMD_TIMEOUT = 6000;    // mist off if no command this long
+
+// ---- per-board friendly identity ----------------------------------------
+// Two short words picked from the MAC give every board a unique, memorable,
+// STABLE name (survives reboot/erase) — e.g. "fluffy-otter". It's the board's
+// default room, so a fresh board is private (nobody can drive it without
+// knowing its words). Modulo on the list sizes, so the lists can be any length.
+static const char* const ADJ[] = {
+  "fluffy","misty","dreamy","cozy","breezy","sunny","cloudy","foggy","frosty",
+  "snowy","dewy","hazy","balmy","gentle","sleepy","happy","jolly","merry",
+  "bouncy","bubbly","perky","zippy","snappy","peppy","sparkly","glowy","shiny",
+  "velvety","silky","downy","woolly","mossy","leafy","minty","peachy","honey",
+  "sugary","mellow","jazzy","groovy","swirly","wavy","curly","fizzy","plucky",
+  "dapper","nifty","spiffy","quirky","lucky","brave","calm","swift","tiny",
+  "mighty","noble" };
+static const char* const NOUN[] = {
+  "otter","panda","koala","llama","alpaca","walrus","badger","beaver","hedgehog",
+  "hamster","gecko","newt","puffin","penguin","narwhal","dolphin","seal",
+  "manatee","wombat","quokka","lemur","sloth","marmot","ferret","weasel",
+  "meerkat","raccoon","fox","lynx","bobcat","ocelot","robin","finch","sparrow",
+  "magpie","heron","crane","swan","goose","cygnet","tadpole","minnow","guppy",
+  "snail","beetle","cricket","firefly","glowworm","moth","comet","pebble",
+  "acorn","pinecone","mushroom","teapot","kettle","lantern","mitten",
+  "scooter","kayak","blimp" };
+
+void makeIdentity(const uint8_t* mac) {
+  const char* a = ADJ[mac[4] % (sizeof(ADJ) / sizeof(ADJ[0]))];
+  const char* n = NOUN[mac[5] % (sizeof(NOUN) / sizeof(NOUN[0]))];
+  snprintf(privateRoom, sizeof(privateRoom), "%s-%s", a, n);     // "fluffy-otter"
+  snprintf(privateName, sizeof(privateName), "%s %s", a, n);     // "fluffy otter"
+  privateName[0] = toupper((unsigned char)privateName[0]);       // -> Title Case
+  for (size_t i = 1; privateName[i]; i++)
+    if (privateName[i - 1] == ' ') privateName[i] = toupper((unsigned char)privateName[i]);
+}
 
 const char* waterName(MistSenseState s) {
   switch (s) {
@@ -118,8 +156,10 @@ const char SETUP_PAGE[] PROGMEM = R"HTML(
 <form method="POST" action="/save">
  <label>Name this maker (optional)</label>
  <input name="name" id="name" autocomplete="off" maxlength="32" placeholder="e.g. Left, Center, Stage-1">
- <label>Room <span style="font-weight:400;color:#3a6b7e">&middot; must match the app</span></label>
+ <label>Room <span style="font-weight:400;color:#3a6b7e">&middot; same room = shared control</span></label>
  <input name="room" id="room" autocomplete="off" maxlength="32">
+ <p style="font-size:.72rem;color:#3a6b7e;margin:-6px 0 12px">Private to this board: <b id="priv">&mdash;</b>
+  <a href="#" id="usepriv" style="color:#1d81a6">use it</a>. For a group, type a shared name like <b>workshop</b>.</p>
  <label>WiFi network</label>
  <input name="ssid" list="nets" id="ssid" autocomplete="off" required>
  <datalist id="nets"></datalist>
@@ -134,7 +174,9 @@ function test(){on=!on;fetch('/test?on='+(on?1:0));let b=document.getElementById
  b.classList.toggle('on',on);b.textContent=on?'■ Stop test':'💨 Test mist (30%)';}
 fetch('/info').then(r=>r.json()).then(d=>{document.getElementById('name').value=d.name;
  document.getElementById('room').value=d.room;document.getElementById('id').textContent=d.id;
- document.getElementById('host').textContent=d.host;}).catch(()=>{});
+ document.getElementById('priv').textContent=d.priv;document.getElementById('host').textContent=d.host;}).catch(()=>{});
+document.getElementById('usepriv').onclick=function(e){e.preventDefault();
+ document.getElementById('room').value=document.getElementById('priv').textContent;};
 fetch('/scan').then(r=>r.json()).then(a=>{document.getElementById('nets').innerHTML=
  a.map(s=>'<option value="'+s.replace(/"/g,'')+'">').join('');}).catch(()=>{});
 </script></body></html>
@@ -151,15 +193,16 @@ void handleTest() {
   applyLevel(portal.arg("on") == "1" ? 30 : 0);   // local hardware check, no cloud
   portal.send(200, "text/plain", "ok");
 }
-void handleInfo() {                                // id + name + room + host (prefills the page)
-  char buf[160];
-  snprintf(buf, sizeof(buf), "{\"id\":\"%s\",\"name\":\"%s\",\"room\":\"%s\",\"host\":\"%s\"}",
-           deviceId, deviceName, room.c_str(), RELAY_HOST);
+void handleInfo() {                                // id + name + room + private room + host (prefills page)
+  char buf[240];
+  snprintf(buf, sizeof(buf),
+           "{\"id\":\"%s\",\"name\":\"%s\",\"room\":\"%s\",\"priv\":\"%s\",\"host\":\"%s\"}",
+           deviceId, deviceName, room.c_str(), privateRoom, RELAY_HOST);
   portal.send(200, "application/json", buf);
 }
 void handleSave() {
   ssid = portal.arg("ssid"); pass = portal.arg("pass");
-  room = portal.arg("room"); if (room.isEmpty()) room = DEFAULT_ROOM;
+  room = portal.arg("room"); if (room.isEmpty()) room = privateRoom;  // blank = go private
   prefs.putString("ssid", ssid);
   prefs.putString("pass", pass);
   prefs.putString("name", portal.arg("name"));   // friendly label (blank = keep Mist-XXXX)
@@ -286,18 +329,21 @@ void setup() {
   uint8_t mac[6];
   WiFi.mode(WIFI_STA);                              // init WiFi first so the MAC reads real (not 0000)
   WiFi.macAddress(mac);
-  snprintf(deviceId,   sizeof(deviceId),   "%02X%02X", mac[4], mac[5]);
-  snprintf(deviceName, sizeof(deviceName), "Mist-%s", deviceId);
+  snprintf(deviceId, sizeof(deviceId), "%02X%02X", mac[4], mac[5]);
+  makeIdentity(mac);                                // privateRoom + privateName from the MAC
 
   prefs.begin("mistwifi", false);
   ssid = prefs.getString("ssid", "");
   pass = prefs.getString("pass", "");
-  room = prefs.getString("room", DEFAULT_ROOM);     // group label (matches the app)
-  String nm = prefs.getString("name", "");          // optional friendly label
+  room = prefs.getString("room", privateRoom);      // private to this board until set to a shared name
+  String nm = prefs.getString("name", "");          // optional friendly label (blank = the private name)
   if (nm.length()) nm.toCharArray(deviceName, sizeof(deviceName));
+  else { strncpy(deviceName, privateName, sizeof(deviceName) - 1); deviceName[sizeof(deviceName) - 1] = 0; }
 
   Serial.println();
   Serial.printf("==== %s  (id: %s, room: %s, relay: %s) ====\n", deviceName, deviceId, room.c_str(), RELAY_HOST);
+  Serial.printf("[ID] this board is private room \"%s\" — set room to a shared name like \"%s\" for a group\n",
+                privateRoom, SHARED_ROOM_EG);
 
   // No saved WiFi, or button held at boot -> run the setup portal. Otherwise
   // connect (and fall back to the portal if the saved WiFi won't connect).
