@@ -302,6 +302,11 @@ function drawBands(cx, arr) {
 
 // ───────────────────────── mode switching ─────────────────────────
 async function selectMode(key) {
+  const tile = [...modesEl.children].find(b => b.dataset.mode === key);
+  if (tile && tile.classList.contains("dim")) {        // capability missing — explain, don't fail blank
+    sensorEl.hidden = false; sensorHint.textContent = "⚠ " + (tile.dataset.why || "Not available here.");
+    return;
+  }
   const next = SOURCES[key];
   const myGen = ++modeGen;                            // cancel-token first: also cancels an in-flight
   if (source === next) return setManual();           // start() when toggling the active mode back off
@@ -356,16 +361,50 @@ function setRoute(r) {
   phaseCtl.hidden = r !== "phase"; seen.clear();
 }
 
-// room dialog
-$("roomBtn").onclick = () => { $("roomInput").value = room; $("roomDlg").showModal(); };
-$("roomSave").onclick = (e) => {
-  const v = $("roomInput").value.trim(); if (!v) return;
+// room dialog — with a prompt() fallback for Safari < 15.4 (no <dialog>/showModal)
+function changeRoom(v) {
+  v = (v || "").trim(); if (!v || v === room) return;
   localStorage.setItem("mm_room", v);
   const u = new URL(location); u.searchParams.set("room", v); history.replaceState(0, "", u);
   connect();                                          // connect() cleanly drops the old socket + timer
+}
+const roomDlg = $("roomDlg");
+$("roomBtn").onclick = () => {
+  if (roomDlg && typeof roomDlg.showModal === "function") { $("roomInput").value = room; roomDlg.showModal(); }
+  else changeRoom(prompt("Room name — same room = shared control. Use your board's two words to control just it.", room));
 };
+$("roomSave").onclick = () => changeRoom($("roomInput").value);
 
 function setFill(el) { el.style.setProperty("--fill", ((el.value - el.min) / (el.max - el.min) * 100) + "%"); }
+
+// ───────────────────────── browser capability check ─────────────────────────
+// Sensor modes need a secure context + getUserMedia (camera/mic), and Tilt needs
+// DeviceOrientation. Older iOS Safari (< 15.4) and in-app browsers miss some — so
+// grey out what won't work and say why, instead of failing on a blank screen.
+function iosVersion() {
+  const m = navigator.userAgent.match(/OS (\d+)_(\d+)/i);
+  return /iP(hone|ad|od)/.test(navigator.userAgent) && m ? +m[1] + (+m[2]) / 10 : null;
+}
+function checkCompat() {
+  const hasCam = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const hasMotion = typeof DeviceOrientationEvent !== "undefined";
+  [...modesEl.children].forEach(b => {
+    const needsCam = b.dataset.mode !== "motion";       // mic/light/face/music need camera or mic
+    if (needsCam ? !hasCam : !hasMotion) {
+      b.classList.add("dim");
+      b.dataset.why = needsCam
+        ? "Camera/mic aren't available here — open this page in Safari or Chrome, not inside another app."
+        : "Motion sensing isn't available on this device or browser.";
+    }
+  });
+  const b = $("compat"); if (!b) return;
+  const ios = iosVersion();
+  let msg = "";
+  if (!window.isSecureContext) msg = "⚠ Not a secure (https) connection — sensors are blocked here.";
+  else if (!hasCam) msg = "📷 <b>Sensor modes need Safari or Chrome.</b> Opened from another app (Messages, Instagram…)? Tap ••• → <b>Open in Browser</b>. The slider below always works.";
+  else if (ios && ios < 15.4) msg = "ℹ️ You're on iOS " + ios.toFixed(1) + " — for the full experience, update to <b>iOS 15.4+</b> (Settings → General → Software Update). The controls still work.";
+  if (msg) { b.innerHTML = msg; b.hidden = false; }
+}
 
 // ───────────────────────── main loop ─────────────────────────
 function tick(now) {
@@ -388,5 +427,6 @@ function tick(now) {
 setFill(manual); setFill(gain); setFill(spread);
 manualVal.textContent = manual.value + "%";
 energy = +manual.value;          // start matching the slider (default 30%)
+checkCompat();                   // grey out unsupported sensors + show a friendly note
 connect();
 requestAnimationFrame(tick);

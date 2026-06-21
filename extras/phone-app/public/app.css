@@ -30,7 +30,7 @@ body {
   margin: 0;
   font-family: var(--font-body);
   color: var(--ink);
-  min-height: 100dvh;
+  min-height: 100vh; min-height: 100dvh;   /* 100vh fallback for iOS < 15.4 */
   padding: 0 16px calc(28px + env(safe-area-inset-bottom));
   max-width: 480px; margin-inline: auto;
 }
@@ -40,10 +40,10 @@ body {
 
 /* ── dreamy sky + clouds + grain ─────────────────────────────────────── */
 .sky {
-  position: fixed; inset: 0; z-index: -3;
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: -3;
   background: linear-gradient(180deg, var(--f2) 0%, var(--f4) 42%, var(--f7) 100%);
 }
-.clouds { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+.clouds { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: -2; overflow: hidden; pointer-events: none; }
 .clouds span {
   position: absolute; display: block;
   width: 220px; height: 70px; border-radius: 100px;
@@ -59,7 +59,7 @@ body {
 @keyframes drift { to { left: 130%; } }
 
 .grain {
-  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: -1; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 220px 220px; mix-blend-mode: screen; opacity: .12;
 }
@@ -73,7 +73,7 @@ body {
 /* subtle frosted scrim so cards stay readable as they scroll under the header;
    masked to fade out downward — no hard edge, header content stays crisp above */
 .bar::before {
-  content: ""; position: absolute; inset: -2px -16px -20px; z-index: -1; pointer-events: none;
+  content: ""; position: absolute; top: -2px; right: -16px; bottom: -20px; left: -16px; z-index: -1; pointer-events: none;
   backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
   background: linear-gradient(180deg, rgb(123 205 232 / .42), rgb(123 205 232 / 0));
   -webkit-mask-image: linear-gradient(180deg, #000 52%, transparent 100%);
@@ -181,9 +181,9 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 .sensor { margin-top: 16px; }
 .meter { position: relative; height: 46px; border-radius: 13px; background: var(--f2); overflow: hidden;
   box-shadow: inset 0 2px 6px rgb(12 74 97 / .15); }
-.meter i { position: absolute; inset: 0; width: var(--fill, 0%); background: linear-gradient(90deg, var(--f5), var(--accent));
+.meter i { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: var(--fill, 0%); background: linear-gradient(90deg, var(--f5), var(--accent));
   transition: width .12s linear; }
-.meter b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+.meter b { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 1rem; color: var(--ink); }
 #cam { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .bands { width: 100%; height: 70px; border-radius: 13px; background: var(--f2); margin-top: 10px;
@@ -233,6 +233,15 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 .text { width: 100%; font: 600 1rem var(--font-body); color: var(--ink); border: 2px solid var(--f3);
   border-radius: 12px; padding: 11px; background: #fff; }
 .dlg menu { display: flex; gap: 10px; padding: 0; margin: 16px 0 0; }
+
+/* ── compat banner + unsupported sense tiles ─────────────────────────── */
+.banner {
+  background: #fff; color: var(--ink); border: 2px solid var(--accent);
+  border-radius: 14px; padding: 12px 14px; margin: 4px 0 14px;
+  font-size: .82rem; line-height: 1.45; box-shadow: 0 3px 9px rgb(12 74 97 / .12);
+}
+.banner b { font-weight: 700; }
+.mode.dim { opacity: .45; }            /* sensor unavailable here — tap still explains why */
 
 @media (prefers-reduced-motion: reduce) {
   .card, .clouds span { animation: none; }

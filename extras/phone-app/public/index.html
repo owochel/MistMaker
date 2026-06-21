@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#58c4e0">
+<meta name="theme-color" content="#8edcee"><!-- match top of the sky gradient (--f2) so the iOS bar blends -->
 <title>Mist Control · ByProduct Lab</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,6 +24,9 @@
 </header>
 
 <main>
+  <!-- friendly note for older / in-app browsers (filled by checkCompat in app.js) -->
+  <div class="banner" id="compat" hidden></div>
+
   <!-- ☁ the live hero: what the mist is doing right now ☁ -->
   <section class="card hero">
     <div class="eyebrow">now misting</div>
@@ -96,7 +99,7 @@
 <dialog id="roomDlg" class="dlg">
   <form method="dialog">
     <h3>Room name</h3>
-    <p>A room groups the makers a phone controls — same room = shared control, different rooms are separate. Default is “workshop”. For a private or separate session, pick a name here <b>and set the same room</b> in each maker's WiFi setup.</p>
+    <p>A room groups the makers a phone controls — same room = shared control, different rooms are separate. For a group session use one shared name like “workshop” on every maker. To control your own board at home, set this to the two words printed on it (shown in its WiFi setup).</p>
     <input id="roomInput" class="text" autocomplete="off" spellcheck="false">
     <menu><button value="cancel" class="btn ghost">Cancel</button><button id="roomSave" value="save" class="btn">Join</button></menu>
   </form>
