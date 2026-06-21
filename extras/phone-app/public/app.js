@@ -43,7 +43,7 @@ function connect() {
        || localStorage.getItem("mm_room") || "workshop";
   roomName.textContent = room;
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?room=${encodeURIComponent(room)}&role=phone&name=Phone`;
-  setConn("…", "saying hi…");
+  setConn("…", "connecting…");
   ws = new WebSocket(url);
   ws.onopen    = () => setConn("ok", "connected");
   ws.onclose   = () => { setConn("off", "reconnecting…"); reconnectTimer = setTimeout(connect, 2000); };
@@ -151,6 +151,22 @@ function renderDevs() {
 const G = () => gain.value / 50;               // sensitivity 0.02..2, 1 = neutral
 let inverted = false;
 
+// a little segmented control (reuses the .route/.rbtn look) shown under a mode —
+// used by Light (camera), Move (lean/shake) and Face (expression)
+function segPicker(items, current, onPick) {
+  const wrap = document.createElement("div");
+  wrap.className = "route"; wrap.style.marginTop = "12px";
+  wrap.style.gridTemplateColumns = `repeat(${items.length}, 1fr)`;
+  items.forEach(([key, label]) => {
+    const b = document.createElement("button");
+    b.className = "rbtn" + (key === current ? " on" : ""); b.textContent = label;
+    b.onclick = () => { onPick(key); [...wrap.children].forEach(c => c.classList.remove("on")); b.classList.add("on"); };
+    wrap.appendChild(b);
+  });
+  sensorHint.before(wrap);
+  return wrap;
+}
+
 const Manual = {
   name: "slider",
   start() { energy = +manual.value; },
@@ -168,7 +184,7 @@ function micAnalyser(fftSize) {
 }
 
 const Mic = {
-  name: "mic", hint: "Blow across the mic or make noise — louder = more mist.",
+  name: "mic", hint: "Blow or make noise — louder = more mist.",
   async start() { this.a = await micAnalyser(1024); this.buf = new Uint8Array(this.a.an.fftSize); },
   read() {
     if (!this.a) return;
@@ -181,13 +197,23 @@ const Mic = {
 };
 
 const Light = {
-  name: "light", invert: true, invLabel: "cover = more",
-  hint: "Point the camera at a lamp, or cover it with your hand.",
+  name: "light", invert: true, invLabel: "cover = more", facing: "environment",
+  hint: "Point at a light — brighter = more mist.",
   async start() {
-    this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: this.facing } });
     cam.srcObject = this.stream; await cam.play();
     this.cv = document.createElement("canvas"); this.cv.width = this.cv.height = 24;
     this.cx = this.cv.getContext("2d", { willReadFrequently: true });
+    this.picker = segPicker([["environment", "📷 Back"], ["user", "🤳 Front"]], this.facing, k => this.setFacing(k));
+  },
+  async setFacing(f) {                              // swap front/back camera live
+    if (f === this.facing && this.stream) return;
+    this.facing = f;
+    try {
+      if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f } });
+      cam.srcObject = this.stream; await cam.play();
+    } catch { sensorHint.textContent = "⚠ Couldn't switch camera."; }
   },
   read() {
     if (!this.cx || cam.readyState < 2) return;
@@ -197,29 +223,46 @@ const Light = {
     let b = clamp((lum / (px.length / 4)) / 255 * 100 * G());
     energy = inverted ? 100 - b : b;
   },
-  stop() { teardown({ stream: this.stream }); this.stream = null; },
+  stop() { teardown({ stream: this.stream }); this.stream = null; this.picker?.remove(); this.picker = null; },
 };
 
 const Motion = {
-  name: "motion", invert: true, invLabel: "flip direction",
-  hint: "Tilt the phone left/right. Flat = off, tilted = full.",
+  name: "motion", invert: true, invLabel: "flip it", swing: "lean",
+  hint: "Tilt left or right — more tilt, more mist.",
   async start() {
-    if (typeof DeviceOrientationEvent !== "undefined" && DeviceOrientationEvent.requestPermission) {
-      const r = await DeviceOrientationEvent.requestPermission();   // iOS: needs this tap
-      if (r !== "granted") throw new Error("Motion access was denied.");
-    }
-    this.h = (e) => { this.g = e.gamma || 0; };                     // -90..90 left/right tilt
-    window.addEventListener("deviceorientation", this.h);
+    // one tap grants iOS motion (covers both orientation + acceleration)
+    const askM = typeof DeviceMotionEvent !== "undefined" && DeviceMotionEvent.requestPermission;
+    const askO = typeof DeviceOrientationEvent !== "undefined" && DeviceOrientationEvent.requestPermission;
+    if (askM) { if (await DeviceMotionEvent.requestPermission() !== "granted") throw new Error("Motion access was denied."); }
+    else if (askO) { if (await DeviceOrientationEvent.requestPermission() !== "granted") throw new Error("Motion access was denied."); }
+    this.g = 0; this.shake = 0; this.lastMag = null;
+    this.ho = (e) => { this.g = e.gamma || 0; };                    // -90..90 lean (left/right)
+    this.hm = (e) => {                                              // shake = frame-to-frame jerk
+      const a = e.accelerationIncludingGravity || e.acceleration || {};
+      const mag = Math.hypot(a.x || 0, a.y || 0, a.z || 0);
+      if (this.lastMag !== null) this.shake = Math.min(120, this.shake + Math.abs(mag - this.lastMag) * 5);
+      this.lastMag = mag;
+    };
+    window.addEventListener("deviceorientation", this.ho);
+    window.addEventListener("devicemotion", this.hm);
+    this.picker = segPicker([["lean", "↔ Lean"], ["shake", "🤳 Shake"]], this.swing, k => {
+      this.swing = k; invertRow.hidden = (k === "shake");          // "flip it" is lean-only
+      sensorHint.textContent = k === "shake" ? "Shake your phone — harder = more mist." : this.hint;
+    });
   },
   read() {
-    let v = clamp(Math.abs(this.g || 0) / 60 * 100 * G());
-    energy = inverted ? 100 - v : v;
+    if (this.swing === "shake") { energy = clamp(this.shake * G()); this.shake *= 0.88; } // decays when you stop
+    else { let v = clamp(Math.abs(this.g || 0) / 60 * 100 * G()); energy = inverted ? 100 - v : v; }
   },
-  stop() { if (this.h) window.removeEventListener("deviceorientation", this.h); },
+  stop() {
+    if (this.ho) window.removeEventListener("deviceorientation", this.ho);
+    if (this.hm) window.removeEventListener("devicemotion", this.hm);
+    this.picker?.remove(); this.picker = null;
+  },
 };
 
 const Face = {
-  name: "face", hint: "Open your mouth wide. (Tap ▸ for brows or blink.)",
+  name: "face", hint: "Open your mouth — wider = more mist.",
   expr: "mouth",
   async start() {
     sensorHint.textContent = "loading face tracking…";
@@ -231,7 +274,7 @@ const Face = {
     });
     this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
     cam.srcObject = this.stream; await cam.play();
-    this.addExprPicker();
+    this.picker = segPicker([["mouth", "😮 Mouth"], ["brows", "🤨 Brows"], ["blink", "😉 Blink"]], this.expr, k => this.expr = k);
     sensorHint.textContent = this.hint;
   },
   read() {
@@ -245,21 +288,11 @@ const Face = {
           : (get("eyeBlinkLeft") + get("eyeBlinkRight")) / 2;       // blink
     energy = clamp(v * 130 * G());
   },
-  addExprPicker() {
-    if (this.picker) return;
-    this.picker = document.createElement("div"); this.picker.className = "route"; this.picker.style.marginTop = "12px";
-    [["mouth","😮 Mouth"],["brows","🤨 Brows"],["blink","😉 Blink"]].forEach(([k, label], i) => {
-      const b = document.createElement("button"); b.className = "rbtn" + (i === 0 ? " on" : ""); b.textContent = label;
-      b.onclick = () => { this.expr = k; [...this.picker.children].forEach(c => c.classList.remove("on")); b.classList.add("on"); };
-      this.picker.appendChild(b);
-    });
-    sensorHint.before(this.picker);
-  },
   stop() { teardown({ stream: this.stream }); this.fl?.close?.(); this.fl = null; this.picker?.remove(); this.picker = null; },
 };
 
 const Audio = {
-  name: "audio", hint: "Play music near the phone — each maker becomes one frequency band.",
+  name: "audio", hint: "Play a song — each maker takes a different sound.",
   async start() {
     this.a = await micAnalyser(256); this.buf = new Uint8Array(this.a.an.frequencyBinCount);
     bandsCv.hidden = false; this.ctx2d = bandsCv.getContext("2d");
@@ -373,7 +406,7 @@ function changeRoom(v) {
 const roomDlg = $("roomDlg");
 $("roomBtn").onclick = () => {
   if (roomDlg && typeof roomDlg.showModal === "function") { $("roomInput").value = room; roomDlg.showModal(); }
-  else changeRoom(prompt("Room name — same room = shared control. Use your board's two words to control just it.", room));
+  else changeRoom(prompt("Room name. Same name = shared control. Type your maker's two words to control just it.", room));
 };
 $("roomSave").onclick = () => changeRoom($("roomInput").value);
 

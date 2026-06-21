@@ -20,7 +20,7 @@
 <header class="bar">
   <div class="mark"><svg class="cloud-ico" viewBox="0 0 24 24"><path d="M7 18h9a4 4 0 0 0 .4-8A5.5 5.5 0 0 0 6 9.3 3.8 3.8 0 0 0 7 18Z"/></svg>Mist&nbsp;Control</div>
   <button class="chip" id="roomBtn" title="Change room">☁ <b id="roomName">workshop</b></button>
-  <div class="conn" id="conn"><i></i><span id="connTxt">saying hi…</span></div>
+  <div class="conn" id="conn"><i></i><span id="connTxt">connecting…</span></div>
 </header>
 
 <main>
@@ -36,7 +36,7 @@
       sending to <select id="target" class="sel" aria-label="Which makers to send to"><option value="all">every maker</option></select>
     </div>
     <button id="engage" class="btn big">Start misting</button>
-    <div class="hint" id="hint">Pick who to send to, then tap Start — or just slide below.</div>
+    <div class="hint" id="hint">Tap Start, or just drag the slider.</div>
   </section>
 
   <!-- ☁ MANUAL ☁ the always-there slider -->
@@ -51,10 +51,10 @@
     <div class="phead"><h2>Play with it</h2><div class="pill" id="modePill">slider</div></div>
     <div class="modes" id="modes">
       <button data-mode="mic"    class="mode"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><b>Mic</b><small>blow on it!</small></button>
-      <button data-mode="light"  class="mode"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg><b>Light</b><small>cover the cam</small></button>
-      <button data-mode="motion" class="mode"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 6v6l3 2"/></svg><b>Tilt</b><small>lean &amp; shake</small></button>
+      <button data-mode="light"  class="mode"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg><b>Light</b><small>point at light</small></button>
+      <button data-mode="motion" class="mode"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 6v6l3 2"/></svg><b>Move</b><small>lean or shake</small></button>
       <button data-mode="face"   class="mode"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 14a5 5 0 0 0 8 0"/></svg><b>Face</b><small>open wide</small></button>
-      <button data-mode="audio"  class="mode"><svg viewBox="0 0 24 24"><path d="M4 12v0M8 8v8M12 5v14M16 9v6M20 11v2"/></svg><b>Music</b><small>visualizer</small></button>
+      <button data-mode="audio"  class="mode"><svg viewBox="0 0 24 24"><path d="M4 12v0M8 8v8M12 5v14M16 9v6M20 11v2"/></svg><b>Music</b><small>play a song</small></button>
     </div>
 
     <!-- live sense readout + mapping, shown when a mode is on -->
@@ -79,8 +79,8 @@
     <div class="phead"><h2>Your makers</h2><div class="pval"><b id="devCount">0</b> online</div></div>
     <div class="route" id="route" hidden>
       <button data-route="sync"     class="rbtn on">Together<small>all in sync</small></button>
-      <button data-route="phase"    class="rbtn">Wave<small>ripple / delay</small></button>
-      <button data-route="spectrum" class="rbtn">Spectrum<small>one band each</small></button>
+      <button data-route="phase"    class="rbtn">Wave<small>a ripple</small></button>
+      <button data-route="spectrum" class="rbtn">Split<small>one sound each</small></button>
     </div>
     <div class="phasectl srow" id="phaseCtl" hidden>
       <label>spread</label>
@@ -99,7 +99,7 @@
 <dialog id="roomDlg" class="dlg">
   <form method="dialog">
     <h3>Room name</h3>
-    <p>A room groups the makers a phone controls — same room = shared control, different rooms are separate. For a group session use one shared name like “workshop” on every maker. To control your own board at home, set this to the two words printed on it (shown in its WiFi setup).</p>
+    <p>A room is the group of makers you control. Use the same name — like “workshop” — on every maker for a group. To control just your own at home, type the two words printed on it.</p>
     <input id="roomInput" class="text" autocomplete="off" spellcheck="false">
     <menu><button value="cancel" class="btn ghost">Cancel</button><button id="roomSave" value="save" class="btn">Join</button></menu>
   </form>
