@@ -110,9 +110,26 @@ function setRoster(list) {
   const ids = new Set(list.map(d => d.id));
   for (let i = makers.length - 1; i >= 0; i--) if (!ids.has(makers[i].id)) makers.splice(i, 1);
   for (const d of list) if (!makers.find(m => m.id === d.id)) makers.push({ ...d, level: 0, current_ma: 0, water: "?", rssi: 0 });
+  applyOrder();                                // restore the saved wave/spectrum order (by id)
   seen.clear();                                // forget send-history of any departed makers
   renderTargets(); renderDevs(); routeEl.hidden = makers.length < 2;
 }
+
+// ── maker order (persisted by id) — this IS the wave/spectrum sequence ──
+function applyOrder() {
+  let order; try { order = JSON.parse(localStorage.getItem("mm_order") || "[]"); } catch { order = []; }
+  const idx = (id) => { const k = order.indexOf(id); return k < 0 ? 1e9 : k; };
+  makers.sort((a, b) => idx(a.id) - idx(b.id));  // stable: unsaved ids keep roster order, at the end
+}
+function moveMaker(id, dir) {                     // dir: -1 earlier, +1 later
+  const i = makers.findIndex(m => m.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= makers.length) return;
+  [makers[i], makers[j]] = [makers[j], makers[i]];
+  localStorage.setItem("mm_order", JSON.stringify(makers.map(m => m.id)));
+  seen.clear();                                  // order changed → resend wave/spectrum levels
+  renderTargets(); renderDevs();
+}
+devsEl.onclick = (e) => { const b = e.target.closest(".mv"); if (b && !b.disabled) moveMaker(b.dataset.id, b.dataset.mv === "up" ? -1 : 1); };
 function updateMaker(m) {
   const d = makers.find(x => x.id === m.id);
   if (!d) return;
@@ -141,17 +158,21 @@ function renderDevs() {
   devCount.textContent = makers.length;
   if (!makers.length) { devsEl.innerHTML = `<li class="empty">No makers in &ldquo;${esc(room)}&rdquo; yet. Power one on, or tap <b>➕ Add a maker</b> below to bring one in by its two words ☁</li>`; renderAlert(0); return; }
   let attention = 0;
-  devsEl.innerHTML = makers.map(d => {
+  const many = makers.length >= 2;                     // order/reorder only matters with 2+
+  devsEl.innerHTML = makers.map((d, i) => {
     const lvl = clamp(+d.level || 0);
-    const w = WATER[d.water];                         // undefined while unknown ("?")
+    const w = WATER[d.water];                          // undefined while unknown ("?")
     if (w && w.cls !== "ok") attention++;
-    const ring = w && w.cls !== "ok" ? " " + w.cls : "";       // .dev.warn / .dev.bad highlight
+    const ring = w && w.cls !== "ok" ? " " + w.cls : "";        // .dev.warn / .dev.bad highlight
     const badge = w ? `<span class="badge ${w.cls}">${w.label}</span>` : "";
-    const sig = Number.isFinite(+d.rssi) && d.rssi ? `${(+d.rssi).toFixed(0)} dBm` : "";
-    return `<li class="dev${ring}"><div class="dev-top"><span class="dev-name">${esc(d.name)}</span>
-      <span class="dev-sig">📶 ${esc(sig)}</span></div>
+    const sig = Number.isFinite(+d.rssi) && d.rssi ? `<span>📶 ${(+d.rssi).toFixed(0)} dBm</span>` : "";
+    const pos = many ? `<span class="pos" title="Wave / spectrum order">${i + 1}</span>` : "";
+    const mv = many ? `<span class="mv-grp">`
+        + `<button class="mv" data-mv="up" data-id="${esc(d.id)}" aria-label="Move earlier"${i === 0 ? " disabled" : ""}>↑</button>`
+        + `<button class="mv" data-mv="down" data-id="${esc(d.id)}" aria-label="Move later"${i === makers.length - 1 ? " disabled" : ""}>↓</button></span>` : "";
+    return `<li class="dev${ring}"><div class="dev-top">${pos}<span class="dev-name">${esc(d.name)}</span>${mv}</div>
       <div class="dev-bar"><i style="width:${lvl}%"></i></div>
-      <div class="dev-meta"><span>${lvl}%</span><span>${Math.round(+d.current_ma || 0)} mA</span>${badge}</div></li>`;
+      <div class="dev-meta"><span>${lvl}%</span><span>${Math.round(+d.current_ma || 0)} mA</span>${sig}${badge}</div></li>`;
   }).join("");
   renderAlert(attention);
 }

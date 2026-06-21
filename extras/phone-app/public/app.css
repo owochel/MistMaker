@@ -209,7 +209,7 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 .devs .empty { color: var(--ink-soft); font-size: .88rem; text-align: center; padding: 14px 0; }
 .dev { background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 3px 9px rgb(12 74 97 / .1); }
 .dev-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.dev-name { font-weight: 700; font-size: .92rem; }
+.dev-name { font-weight: 700; font-size: .92rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dev-sig { margin-left: auto; font-size: .68rem; color: var(--ink-soft); display: flex; align-items: center; gap: 4px; }
 .dev-bar { height: 10px; border-radius: 999px; background: var(--f2); overflow: hidden; }
 .dev-bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--f5), var(--accent)); transition: width .3s; }
@@ -224,6 +224,14 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 .alert { background: rgb(255 200 49 / .22); color: #8a6200; border-radius: 12px;
   padding: 9px 12px; font-size: .8rem; font-weight: 600; margin-bottom: 12px; line-height: 1.35; }
 .addmaker { margin-top: 14px; }      /* "➕ Add a maker by its words" button */
+/* per-maker order (the wave/spectrum sequence) + reorder controls */
+.pos { flex: none; background: var(--accent); color: var(--ink); font-weight: 700; font-size: .72rem;
+  width: 20px; height: 20px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; }
+.mv-grp { margin-left: auto; display: flex; gap: 5px; }
+.mv { width: 27px; height: 27px; border-radius: 8px; border: 0; background: var(--f2); color: var(--ink);
+  font: 700 .95rem var(--font-body); line-height: 1; cursor: pointer; }
+.mv:disabled { opacity: .3; cursor: default; }
+.mv:active:not(:disabled) { background: var(--f3); transform: translateY(1px); }
 
 /* ── footer ──────────────────────────────────────────────────────────── */
 .foot { display: flex; justify-content: space-between; align-items: center; color: var(--mist);
