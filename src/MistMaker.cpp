@@ -62,8 +62,7 @@ void MistMaker::turnOn() {
 void MistMaker::turnOff() {
   if (_enPin >= 0) digitalWrite(_enPin, LOW);
   if (_ledPin >= 0) ledcWrite(_ledPin, 0);       // LED off
-  applyDuty(0);
-  digitalWrite(_mistPin, LOW);
+  applyDuty(0);                                   // LEDC duty 0 holds the mist pin low
   _level = 0;
   _state = false;
 }

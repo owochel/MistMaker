@@ -133,8 +133,22 @@ devsEl.onclick = (e) => { const b = e.target.closest(".mv"); if (b && !b.disable
 function updateMaker(m) {
   const d = makers.find(x => x.id === m.id);
   if (!d) return;
+  // full re-render only when something structural changes (name / water badge);
+  // pure telemetry (level/current/rssi) patches in place so reorder taps and the
+  // bar animation survive the 1 Hz updates, and the DOM doesn't churn.
+  const structural = (m.name != null && m.name !== d.name) || (m.water != null && m.water !== d.water);
   Object.assign(d, m); d.seen = performance.now();
-  renderDevs();
+  if (structural) renderDevs(); else patchDev(d);
+}
+function patchDev(d) {
+  const li = [...devsEl.children].find(el => el.dataset && el.dataset.id === d.id);
+  if (!li) return renderDevs();                   // tile not built yet → full render
+  const lvl = clamp(+d.level || 0);
+  const bar = li.querySelector(".dev-bar i"); if (bar) bar.style.width = lvl + "%";
+  const set = (sel, txt) => { const el = li.querySelector(sel); if (el) el.textContent = txt; };
+  set(".m-lvl", lvl + "%");
+  set(".m-ma", Math.round(+d.current_ma || 0) + " mA");
+  if (Number.isFinite(+d.rssi) && d.rssi) set(".m-sig", `📶 ${(+d.rssi).toFixed(0)} dBm`);
 }
 // Devices announce their own name/water, and anyone can join the room as a
 // "device" — so treat those strings as untrusted and escape before innerHTML.
@@ -165,14 +179,14 @@ function renderDevs() {
     if (w && w.cls !== "ok") attention++;
     const ring = w && w.cls !== "ok" ? " " + w.cls : "";        // .dev.warn / .dev.bad highlight
     const badge = w ? `<span class="badge ${w.cls}">${w.label}</span>` : "";
-    const sig = Number.isFinite(+d.rssi) && d.rssi ? `<span>📶 ${(+d.rssi).toFixed(0)} dBm</span>` : "";
+    const sig = Number.isFinite(+d.rssi) && d.rssi ? `<span class="m-sig">📶 ${(+d.rssi).toFixed(0)} dBm</span>` : "";
     const pos = many ? `<span class="pos" title="Wave / spectrum order">${i + 1}</span>` : "";
     const mv = many ? `<span class="mv-grp">`
         + `<button class="mv" data-mv="up" data-id="${esc(d.id)}" aria-label="Move earlier"${i === 0 ? " disabled" : ""}>↑</button>`
         + `<button class="mv" data-mv="down" data-id="${esc(d.id)}" aria-label="Move later"${i === makers.length - 1 ? " disabled" : ""}>↓</button></span>` : "";
-    return `<li class="dev${ring}"><div class="dev-top">${pos}<span class="dev-name">${esc(d.name)}</span>${mv}</div>
+    return `<li class="dev${ring}" data-id="${esc(d.id)}"><div class="dev-top">${pos}<span class="dev-name">${esc(d.name)}</span>${mv}</div>
       <div class="dev-bar"><i style="width:${lvl}%"></i></div>
-      <div class="dev-meta"><span>${lvl}%</span><span>${Math.round(+d.current_ma || 0)} mA</span>${sig}${badge}</div></li>`;
+      <div class="dev-meta"><span class="m-lvl">${lvl}%</span><span class="m-ma">${Math.round(+d.current_ma || 0)} mA</span>${sig}${badge}</div></li>`;
   }).join("");
   renderAlert(attention);
 }
