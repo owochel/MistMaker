@@ -447,7 +447,9 @@ function openAdd() {
     if (w) addMaker(w);
   }
 }
+let addAbort = null;                                   // closes an in-flight Add probe (Cancel / retry)
 function addMaker(words) {
+  if (addAbort) addAbort();                            // abort any previous in-flight attempt
   const board = normalizeRoom(words);
   if (!board) return;
   const dest = room;                                   // bring it into the room I'm in right now
@@ -457,16 +459,17 @@ function addMaker(words) {
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?room=${encodeURIComponent(board)}&role=phone&name=Adder`;
   try { probe = new WebSocket(url); } catch { return setAddStatus("Couldn't reach the relay. Try again.", false); }
   const finish = (msg, ok) => {
-    if (done) return; done = true; clearTimeout(to); try { probe.close(); } catch {}
+    if (done) return; done = true; clearTimeout(to); addAbort = null; try { probe.close(); } catch {}
     setAddStatus(msg, ok);
     if (ok) setTimeout(() => { if (addDlg && addDlg.open) addDlg.close(); }, 1600);
   };
   const to = setTimeout(() => finish(`No maker &ldquo;${esc(board)}&rdquo; answered. Check the two words (printed on it) and that it's powered on.`, false), 7000);
+  addAbort = () => { if (done) return; done = true; clearTimeout(to); addAbort = null; try { probe.close(); } catch {} };  // silent cancel
   probe.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.t === "roster") {
       if (sent) return;                                 // send the move once
-      const devs = m.devices || [];
+      const devs = (m.devices || []).filter((d, i, a) => a.findIndex(x => x.id === d.id) === i);
       if (!devs.length) return;                         // board not joined yet — wait until timeout
       devs.forEach(d => probe.send(JSON.stringify({ t: "room", id: d.id, key: board, room: dest })));
       sent = devs.length;
@@ -477,7 +480,7 @@ function addMaker(words) {
 }
 $("addBtn").onclick = openAdd;
 $("addGo").onclick = () => addMaker(addInput.value);
-$("addCancel").onclick = () => { if (addDlg && addDlg.open) addDlg.close(); };
+$("addCancel").onclick = () => { if (addAbort) addAbort(); if (addDlg && addDlg.open) addDlg.close(); };
 addInput.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addMaker(addInput.value); } };
 
 function setFill(el) { el.style.setProperty("--fill", ((el.value - el.min) / (el.max - el.min) * 100) + "%"); }

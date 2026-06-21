@@ -158,6 +158,7 @@ bool jsonStr(const char* msg, const char* key, char* out, size_t cap) {
   size_t i = 0;
   while (*p && *p != '"' && i + 1 < cap) out[i++] = *p++;
   out[i] = 0;
+  if (*p != '"') { out[0] = 0; return false; }   // ended/clipped before the closing quote -> invalid
   return true;
 }
 
