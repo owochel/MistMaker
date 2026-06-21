@@ -150,19 +150,25 @@ Open your Worker URL on a phone, then:
 - **Slide it** — the always-there manual slider (starts at a gentle 30%).
 - **Start misting** — master on/off. Pick *every maker* or one specific maker.
 - **Play with it** — tap a sense mode; it asks permission, then just works:
-  - **Mic** 🎤 — blow across the mic / make noise → more mist.
-  - **Light** 💡 — point the camera at a lamp, or cover it (toggle "cover = more").
-  - **Tilt** 📱 — lean the phone left/right.
+  - **Mic** 🎤 — blow / make noise → more mist.
+  - **Light** 💡 — point at a light → more mist. Toggle **📷 Back / 🤳 Front**
+    camera, or "cover = more".
+  - **Move** 📱 — **Lean** (tilt left/right) or **Shake** (shake harder → more mist).
   - **Face** 😮 — open your mouth (or switch to brows / blink).
-  - **Music** 🎵 — play a song; the makers become a **spectrum** — one frequency
-    band each. Line them up for a vapor equalizer.
-- **Your makers** — with 2+ makers you get routing:
+  - **Music** 🎵 — play a song; with 2+ makers each takes a different sound (**Split**).
+- **Your makers** — live status per maker: level, current, signal, and a
+  **water/disc chip** (💧 ok · 💧 low · ⚠ no disc). A maker that needs water or has
+  no disc is ringed and called out at the top; a missing/loose disc auto-shuts-off.
+  With 2+ makers you also get routing:
   - **Together** — all in sync.
-  - **Wave** — a ripple/delay across them (use *spread*) — an animation.
-  - **Spectrum** — one audio band per maker (great with Music mode).
+  - **Wave** — a ripple/delay across them (use *spread*).
+  - **Split** — one sound per maker (great with Music).
+
+> **On a laptop?** Wide screens get a two-column dashboard — controls on the left,
+> a live grid of every maker on the right — handy for running a room.
 
 ### Sensor permission notes
-- **iPhone**: the first tap on Mic / Light / Face / Tilt shows a permission prompt
+- **iPhone**: the first tap on Mic / Light / Face / Move shows a permission prompt
   (camera, mic, or motion) — that's expected; tap allow. Motion needs that tap by
   Apple's rules, which is why modes activate on tap.
 - Everything runs **on the phone** — no sensor data leaves the browser; only the
