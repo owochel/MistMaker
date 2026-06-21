@@ -40,14 +40,14 @@
   </section>
 
   <!-- ☁ MANUAL ☁ the always-there slider -->
-  <section class="card">
+  <section class="card" id="cardManual">
     <div class="phead"><h2>Slide it</h2><div class="pval" id="manualVal">30%</div></div>
     <input type="range" id="manual" class="slider" min="0" max="100" value="30" aria-label="Mist level">
     <div class="ticks"><span>off</span><span>gentle</span><span>full</span></div>
   </section>
 
   <!-- ☁ SENSE ☁ phone senses → mist -->
-  <section class="card">
+  <section class="card" id="cardSense">
     <div class="phead"><h2>Play with it</h2><div class="pill" id="modePill">slider</div></div>
     <div class="modes" id="modes">
       <button data-mode="mic"    class="mode"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><b>Mic</b><small>blow on it!</small></button>
@@ -75,7 +75,7 @@
   </section>
 
   <!-- ☁ MAKERS ☁ many makers, one phone -->
-  <section class="card">
+  <section class="card" id="cardMakers">
     <div class="phead"><h2>Your makers</h2><div class="pval"><b id="devCount">0</b> online</div></div>
     <div class="route" id="route" hidden>
       <button data-route="sync"     class="rbtn on">Together<small>all in sync</small></button>

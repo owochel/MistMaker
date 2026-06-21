@@ -243,6 +243,34 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 .banner b { font-weight: 700; }
 .mode.dim { opacity: .45; }            /* sensor unavailable here — tap still explains why */
 
+/* ── desktop / wide screens: two columns + a live maker dashboard ──────── */
+@media (min-width: 900px) {
+  body { max-width: 1100px; padding-left: 24px; padding-right: 24px; }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    grid-template-areas:
+      "banner banner"
+      "hero   makers"
+      "manual makers"
+      "sense  makers";
+    gap: 0 22px;
+    align-items: start;
+  }
+  #compat     { grid-area: banner; }
+  .hero       { grid-area: hero; }
+  #cardManual { grid-area: manual; }
+  #cardSense  { grid-area: sense; }
+  #cardMakers { grid-area: makers; }
+  /* the makers panel becomes a dashboard grid that grows with the room */
+  #cardMakers .devs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  #cardMakers .devs .empty { grid-column: 1 / -1; }
+  #cardMakers .dev { padding: 14px; }
+  #cardMakers .dev-bar { height: 13px; }
+  .dev { transition: transform .12s, box-shadow .12s; }
+  .dev:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgb(12 74 97 / .16); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card, .clouds span { animation: none; }
 }
