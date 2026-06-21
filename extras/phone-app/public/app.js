@@ -221,14 +221,19 @@ const Light = {
     this.cx = this.cv.getContext("2d", { willReadFrequently: true });
     this.picker = segPicker([["environment", "📷 Back"], ["user", "🤳 Front"]], this.facing, k => this.setFacing(k));
   },
-  async setFacing(f) {                              // swap front/back camera live
+  async setFacing(f) {                              // swap front/back camera live (atomic)
     if (f === this.facing && this.stream) return;
-    this.facing = f;
+    let next;
     try {
-      if (this.stream) this.stream.getTracks().forEach(t => t.stop());
-      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f } });
-      cam.srcObject = this.stream; await cam.play();
-    } catch { sensorHint.textContent = "⚠ Couldn't switch camera."; }
+      next = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f } });
+      cam.srcObject = next; await cam.play();
+    } catch {
+      if (next) next.getTracks().forEach(t => t.stop());   // discard the new one…
+      if (this.stream) cam.srcObject = this.stream;        // …and keep showing the working camera
+      sensorHint.textContent = "⚠ Couldn't switch camera."; return;
+    }
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());   // retire old only on success
+    this.stream = next; this.facing = f;
   },
   read() {
     if (!this.cx || cam.readyState < 2) return;
@@ -379,7 +384,7 @@ async function selectMode(key) {
     if (myGen !== modeGen) return;                     // superseded; the newer call owns the UI
     source = null; energy = +manual.value;             // fall back to the slider, but…
     [...modesEl.children].forEach(b => b.classList.remove("on"));
-    modePill.textContent = "slider";
+    modePill.textContent = "slider"; invertRow.hidden = true;   // clear any half-shown mode UI
     sensorEl.hidden = false;                            // …keep the panel up to SHOW why it failed
     sensorHint.textContent = "⚠ " + (err.message || "Couldn't start that sensor — check the permission prompt.");
   }

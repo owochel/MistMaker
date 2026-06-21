@@ -201,7 +201,7 @@ fetch('/scan').then(r=>r.json()).then(a=>{document.getElementById('nets').innerH
 void handleScan() {
   int n = WiFi.scanNetworks();
   String j = "[";
-  for (int i = 0; i < n; i++) { if (i) j += ","; j += "\"" + WiFi.SSID(i) + "\""; }
+  for (int i = 0; i < n; i++) { if (i) j += ","; j += "\"" + jsonEsc(WiFi.SSID(i).c_str()) + "\""; }
   j += "]";
   portal.send(200, "application/json", j);
 }
