@@ -24,6 +24,10 @@
 // BUTTON: press the board button any time to toggle a local 30% mist — works
 // even with no WiFi/cloud, and the change syncs to the app's status.
 //
+// SAFETY: the disc's own current draw is sensed every 20 s (no extra parts) —
+// a missing/loose disc auto-shuts-off the mist, and low water is flagged live
+// in the app. Never runs a dry/absent disc.
+//
 // Why the cloud and not the board's own page for the demo? Phone sensors
 // (mic/motion/camera) only work on an HTTPS "secure" page, which the board
 // can't serve over its AP. Hosting the app on Cloudflare gives every phone
@@ -378,11 +382,22 @@ void loop() {
     Serial.println("[WATCHDOG] no commands — mist off");
     applyLevel(0);
   }
-  // Re-probe water/disc every 30 s; never keep driving a missing disc.
-  if (millis() - lastProbe > 30000) {
+  // Re-probe water/disc every 20 s using the disc's own current draw. Never keep
+  // driving a missing/loose disc: cut the mist (even a button-toggled one) and
+  // report it right away; flag low water so the app can warn.
+  if (millis() - lastProbe > 20000) {
     lastProbe = millis();
     MistSenseState s = mist.probe();
-    if (s == MIST_DISC_MISSING || s == MIST_DISC_DISCONNECTED) applyLevel(0);
+    if (s == MIST_DISC_MISSING || s == MIST_DISC_DISCONNECTED) {
+      if (level > 0 || localOn) {
+        Serial.printf("[SAFETY] %s — mist off\n", waterName(s));
+        localOn = false; applyLevel(0);
+      }
+      if (ws.isConnected()) sendStatus();          // tell the app immediately
+    } else if (s == MIST_WATER_LOW) {
+      Serial.println("[WATER] low — refill soon");
+      if (ws.isConnected()) sendStatus();
+    }
   }
   // Status to the app + Serial heartbeat, once a second.
   if (millis() - lastTick > 1000) {
