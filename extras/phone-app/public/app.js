@@ -312,23 +312,40 @@ const Face = {
 };
 
 const Audio = {
-  name: "audio", hint: "Play a song — each maker takes a different sound.",
+  name: "audio", hint: "Play a song — bass, vocals & highs each drive a different maker.",
   async start() {
-    this.a = await micAnalyser(256); this.buf = new Uint8Array(this.a.an.frequencyBinCount);
+    this.a = await micAnalyser(2048);                   // finer low-end so bass/beat resolves
+    this.a.an.smoothingTimeConstant = 0.6;              // snappier than the 0.8 default (more beat)
+    this.buf = new Uint8Array(this.a.an.frequencyBinCount);
+    this.peak = null;                                   // per-band decaying peak (built on first read)
     bandsCv.hidden = false; this.ctx2d = bandsCv.getContext("2d");
     bandsCv.width = (bandsCv.clientWidth || 320) * devicePixelRatio; bandsCv.height = 70 * devicePixelRatio;
     if (makers.length >= 2) { this.prevRoute = route; setRoute("spectrum"); }
   },
   read() {
     if (!this.a) return;
-    this.a.an.getByteFrequencyData(this.buf);
-    const N = Math.max(1, Math.min(makers.length || 8, 16));
-    const out = new Array(N).fill(0);
-    const lo = 2, hi = this.buf.length;                  // skip DC bin
+    const an = this.a.an;
+    an.getByteFrequencyData(this.buf);
+    const N = Math.max(1, Math.min(makers.length || 3, 16));
+    const binHz = (audioCtx ? audioCtx.sampleRate : 44100) / an.fftSize;
+    const fLo = 40, fHi = Math.min(16000, binHz * (this.buf.length - 1));    // musical range
+    if (!this.peak || this.peak.length !== N) this.peak = new Array(N).fill(200);  // high = fade in, no blast
+    const out = new Array(N);
+    let a = Math.max(1, Math.round(fLo / binHz));        // first band's start bin
     for (let i = 0; i < N; i++) {
-      const a = lo + Math.floor((hi - lo) * i / N), b = lo + Math.floor((hi - lo) * (i + 1) / N);
-      let s = 0; for (let j = a; j < b; j++) s += this.buf[j];
-      out[i] = clamp((s / Math.max(1, b - a)) / 255 * 140 * G());
+      // LOG-spaced bands (music + hearing are logarithmic): maker 0 = bass/beat,
+      // middle = vocals, last = highs — scales to any N. Each band starts where
+      // the previous ended, so adjacent bands never double-count a bin.
+      const f1 = fLo * Math.pow(fHi / fLo, (i + 1) / N);
+      const b = Math.min(this.buf.length, Math.max(a + 1, Math.round(f1 / binHz)));
+      let raw = 0;
+      if (a < b) { let s = 0; for (let j = a; j < b; j++) s += this.buf[j]; raw = s / (b - a); }
+      // per-band auto-gain: scale each band to its OWN recent peak, so a quiet
+      // treble band still drives its maker fully (fixes "the last one never mists").
+      this.peak[i] = Math.max(raw, this.peak[i] * 0.992);
+      const ref = Math.max(this.peak[i], 14);            // floor so silence/noise isn't amplified
+      out[i] = clamp(raw < 6 ? 0 : (raw / ref) * 100 * G());   // gate near-silence
+      a = b;                                             // next band continues from here
     }
     bands = out;
     energy = out.reduce((p, c) => p + c, 0) / N;
