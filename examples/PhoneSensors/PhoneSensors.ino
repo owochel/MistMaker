@@ -18,8 +18,10 @@
 // control, different rooms are isolated. Each board defaults to its OWN unique
 // two-word room (e.g. "fluffy-otter", printed in setup + Serial) so a fresh
 // board is private — nobody can drive it without knowing its words. For a group,
-// set every board's room to one shared name (e.g. "workshop") in setup; clear
-// the field to go private again.
+// set every board to one shared name (e.g. "workshop"). Two ways to change a
+// board's room: (1) over-the-air from the app ("Add a maker by its words") with
+// NO reboot — a {t:"room"} command authorized by the printed words; (2) hardware
+// fallback — hold the button at power-on to re-run the WiFi setup page.
 //
 // BUTTON: press the board button any time — in WiFi-setup OR connected mode — to
 // toggle a local 30% mist (works even with no WiFi/cloud); when connected, the
@@ -76,6 +78,7 @@ bool localOn = false;                      // mist toggled on by the board butto
 bool btnPrev = false;                      // button edge-detect
 unsigned long btnMs = 0;                   // button debounce
 bool portalMode = false;                   // true while serving the setup page
+bool roomChangePending = false;            // set by an OTA "room" command; reconnect runs in loop()
 unsigned long lastTick = 0, lastCmd = 0, lastProbe = 0;
 const unsigned long CMD_TIMEOUT = 6000;    // mist off if no command this long
 
@@ -143,6 +146,19 @@ String jsonEsc(const char* s) {
     else o += c;
   }
   return o;
+}
+
+// pull a JSON string value ("key":"value") into out (capped; stops at the closing quote)
+bool jsonStr(const char* msg, const char* key, char* out, size_t cap) {
+  char pat[20];
+  snprintf(pat, sizeof(pat), "\"%s\":\"", key);
+  const char* p = strstr(msg, pat);
+  if (!p) { out[0] = 0; return false; }
+  p += strlen(pat);
+  size_t i = 0;
+  while (*p && *p != '"' && i + 1 < cap) out[i++] = *p++;
+  out[i] = 0;
+  return true;
 }
 
 // 0-100 percentage; the library caps real PWM duty at 50%, so 100 = full mist.
@@ -292,6 +308,21 @@ void onCommand(const char* msg) {
       if (lvl != level) localOn = false;
       applyLevel(lvl);
     }
+  } else if (strstr(msg, "\"t\":\"room\"")) {
+    // Move this board to a new room over-the-air (no reboot). Authorized by the
+    // board's PRINTED two-word key (its private room name) so it can't be hijacked.
+    char cid[8], ckey[40], croom[40];
+    jsonStr(msg, "id",   cid,   sizeof(cid));
+    jsonStr(msg, "key",  ckey,  sizeof(ckey));
+    jsonStr(msg, "room", croom, sizeof(croom));
+    if (!strcmp(cid, deviceId) && !strcmp(ckey, privateRoom) && croom[0] && strcmp(croom, room.c_str())) {
+      Serial.printf("[ROOM] moving \"%s\" -> \"%s\"\n", room.c_str(), croom);
+      room = croom;
+      prefs.putString("room", room);
+      roomChangePending = true;          // reconnect in loop(), not inside this WS callback
+    } else if (!strcmp(cid, deviceId)) {
+      Serial.println("[ROOM] move ignored — wrong key or unchanged room");
+    }
   }
 }
 
@@ -324,6 +355,21 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
   }
 }
 
+// (re)point the relay socket at the CURRENT room (startup + OTA room change)
+void wsConnect() {
+  char path[256];   // room + name up to 32 chars each, ×3 once %-encoded
+  snprintf(path, sizeof(path), "/ws?room=%s&role=device&id=%s&name=%s",
+           urlEncode(room.c_str()).c_str(), deviceId, urlEncode(deviceName).c_str());
+  ws.beginSSL(RELAY_HOST, RELAY_PORT, path);
+}
+// OTA room move: drop the socket and rejoin the new room's Durable Object — no
+// reboot, no WiFi re-entry. Called from loop(), never inside the WS callback.
+void reconnectRoom() {
+  Serial.printf("[ROOM] reconnecting to \"%s\"\n", room.c_str());
+  ws.disconnect();
+  wsConnect();
+}
+
 void startCloud() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid.c_str(), pass.c_str());
@@ -339,13 +385,10 @@ void startCloud() {
   }
   Serial.printf(" ok — ip %s, rssi %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
 
-  char path[256];   // room + name are up to 32 chars each, ×3 once %-encoded
-  snprintf(path, sizeof(path), "/ws?room=%s&role=device&id=%s&name=%s",
-           urlEncode(room.c_str()).c_str(), deviceId, urlEncode(deviceName).c_str());
-  ws.beginSSL(RELAY_HOST, RELAY_PORT, path);
   ws.onEvent(onWsEvent);
   ws.setReconnectInterval(3000);
   ws.enableHeartbeat(15000, 3000, 2);
+  wsConnect();                              // beginSSL to the current room
   mist.probe();
   Serial.println("[OK] ready — open the app on your phone.");
 }
@@ -390,6 +433,7 @@ void loop() {
   if (portalMode) { dns.processNextRequest(); portal.handleClient(); return; }
 
   ws.loop();
+  if (roomChangePending) { roomChangePending = false; reconnectRoom(); }
 
   // Fail-safe: a healthy link refreshes lastCmd every ~2 s (phone keepalive);
   // silence past CMD_TIMEOUT means the link dropped — cut phone-driven mist.
