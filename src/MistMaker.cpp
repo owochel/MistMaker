@@ -26,7 +26,7 @@ MistMaker::MistMaker(const MistMakerPins &p, int pwmFreq, int pwmRes, int duty)
 // Setup
 // ---------------------------------------------------------------------------
 void MistMaker::begin() {
-  if (_ledPin >= 0)    pinMode(_ledPin, OUTPUT);
+  if (_ledPin >= 0)    ledcAttach(_ledPin, 1000, 8);   // PWM: LED brightness mirrors mist level
   if (_enPin >= 0)     pinMode(_enPin, OUTPUT);
   if (_sensePin >= 0)  pinMode(_sensePin, INPUT);
   if (_battPin >= 0)   pinMode(_battPin, INPUT);
@@ -53,7 +53,7 @@ void MistMaker::applyDuty(uint8_t duty) {
 
 void MistMaker::turnOn() {
   if (_enPin >= 0) digitalWrite(_enPin, HIGH);
-  if (_ledPin >= 0) digitalWrite(_ledPin, HIGH);
+  if (_ledPin >= 0) ledcWrite(_ledPin, 255);     // LED full
   _level = 255;
   applyDuty(_dutyMax);
   _state = true;
@@ -61,7 +61,7 @@ void MistMaker::turnOn() {
 
 void MistMaker::turnOff() {
   if (_enPin >= 0) digitalWrite(_enPin, LOW);
-  if (_ledPin >= 0) digitalWrite(_ledPin, LOW);
+  if (_ledPin >= 0) ledcWrite(_ledPin, 0);       // LED off
   applyDuty(0);
   digitalWrite(_mistPin, LOW);
   _level = 0;
@@ -80,7 +80,7 @@ void MistMaker::setLevel(uint8_t level) {
   _level = level;
   if (level == 0) { turnOff(); return; }
   if (_enPin >= 0) digitalWrite(_enPin, HIGH);
-  if (_ledPin >= 0) digitalWrite(_ledPin, HIGH);
+  if (_ledPin >= 0) ledcWrite(_ledPin, level);   // LED brightness tracks mist level (pulses with music)
   // 1..255 -> 1.._dutyMax, rounding so level 255 lands exactly on dutyMax.
   uint8_t duty = (uint8_t)(((uint16_t)level * _dutyMax + 127) / 255);
   if (duty == 0) duty = 1;

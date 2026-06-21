@@ -28,7 +28,7 @@ struct MistMakerPins {
   int8_t mist;     // PWM output to MOSFET gate (required)
   int8_t boostEn;  // TPS61023 boost enable, HIGH = 5V rail on (-1 = none/always on)
   int8_t sense;    // current-sense ADC input (-1 = none)
-  int8_t led;      // status LED (-1 = none)
+  int8_t led;      // status LED (-1 = none); PWM-dimmed to mirror mist level (pulses with music)
   int8_t button;   // user button (-1 = none) — read it yourself, kept for reference
   int8_t battery;  // battery-voltage ADC via divider (-1 = none)
 };

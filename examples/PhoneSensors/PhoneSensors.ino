@@ -31,6 +31,9 @@
 // a missing/loose disc auto-shuts-off the mist, and low water is flagged live
 // in the app. Never runs a dry/absent disc.
 //
+// LED: the onboard LED (D7) is PWM-dimmed to this maker's mist level — so in
+// Music mode it pulses with the maker's assigned frequency band.
+//
 // Why the cloud and not the board's own page for the demo? Phone sensors
 // (mic/motion/camera) only work on an HTTPS "secure" page, which the board
 // can't serve over its AP. Hosting the app on Cloudflare gives every phone
