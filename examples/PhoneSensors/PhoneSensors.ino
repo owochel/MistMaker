@@ -128,6 +128,18 @@ String urlEncode(const char* s) {
   return o;
 }
 
+// minimal JSON-string escape for the few user-entered fields (name / room)
+String jsonEsc(const char* s) {
+  String o; char u[8];
+  for (const char* p = s; *p; p++) {
+    char c = *p;
+    if (c == '"' || c == '\\') { o += '\\'; o += c; }
+    else if ((uint8_t)c < 0x20) { snprintf(u, sizeof(u), "\\u%04x", c); o += u; }
+    else o += c;
+  }
+  return o;
+}
+
 // 0-100 percentage; the library caps real PWM duty at 50%, so 100 = full mist.
 void applyLevel(int pct) {
   pct = constrain(pct, 0, 100);
@@ -194,11 +206,13 @@ void handleTest() {
   portal.send(200, "text/plain", "ok");
 }
 void handleInfo() {                                // id + name + room + private room + host (prefills page)
-  char buf[240];
-  snprintf(buf, sizeof(buf),
-           "{\"id\":\"%s\",\"name\":\"%s\",\"room\":\"%s\",\"priv\":\"%s\",\"host\":\"%s\"}",
-           deviceId, deviceName, room.c_str(), privateRoom, RELAY_HOST);
-  portal.send(200, "application/json", buf);
+  String j = "{\"id\":\"";  j += deviceId;
+  j += "\",\"name\":\"";    j += jsonEsc(deviceName);    // user-entered -> escape
+  j += "\",\"room\":\"";    j += jsonEsc(room.c_str());  // user-entered -> escape
+  j += "\",\"priv\":\"";    j += privateRoom;
+  j += "\",\"host\":\"";    j += RELAY_HOST;
+  j += "\"}";
+  portal.send(200, "application/json", j);
 }
 void handleSave() {
   ssid = portal.arg("ssid"); pass = portal.arg("pass");
@@ -308,7 +322,7 @@ void startCloud() {
   }
   Serial.printf(" ok — ip %s, rssi %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
 
-  char path[160];
+  char path[256];   // room + name are up to 32 chars each, ×3 once %-encoded
   snprintf(path, sizeof(path), "/ws?room=%s&role=device&id=%s&name=%s",
            urlEncode(room.c_str()).c_str(), deviceId, urlEncode(deviceName).c_str());
   ws.beginSSL(RELAY_HOST, RELAY_PORT, path);

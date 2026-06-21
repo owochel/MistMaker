@@ -304,7 +304,9 @@ function drawBands(cx, arr) {
 async function selectMode(key) {
   const tile = [...modesEl.children].find(b => b.dataset.mode === key);
   if (tile && tile.classList.contains("dim")) {        // capability missing — explain, don't fail blank
-    sensorEl.hidden = false; sensorHint.textContent = "⚠ " + (tile.dataset.why || "Not available here.");
+    ++modeGen; setManual();                            // cancel any in-flight start, drop to the slider…
+    sensorEl.hidden = false;                           // …but keep the panel up to show why
+    sensorHint.textContent = "⚠ " + (tile.dataset.why || "Not available here.");
     return;
   }
   const next = SOURCES[key];
@@ -381,20 +383,21 @@ function setFill(el) { el.style.setProperty("--fill", ((el.value - el.min) / (el
 // Sensor modes need a secure context + getUserMedia (camera/mic), and Tilt needs
 // DeviceOrientation. Older iOS Safari (< 15.4) and in-app browsers miss some — so
 // grey out what won't work and say why, instead of failing on a blank screen.
-function iosVersion() {
+function iosVersion() {                                   // {major,minor} or null — compared as ints
   const m = navigator.userAgent.match(/OS (\d+)_(\d+)/i);
-  return /iP(hone|ad|od)/.test(navigator.userAgent) && m ? +m[1] + (+m[2]) / 10 : null;
+  return /iP(hone|ad|od)/.test(navigator.userAgent) && m ? { major: +m[1], minor: +m[2] } : null;
 }
 function checkCompat() {
   const hasCam = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   const hasMotion = typeof DeviceOrientationEvent !== "undefined";
   [...modesEl.children].forEach(b => {
-    const needsCam = b.dataset.mode !== "motion";       // mic/light/face/music need camera or mic
-    if (needsCam ? !hasCam : !hasMotion) {
+    const mode = b.dataset.mode;                          // sensor inputs gate on getUserMedia / motion
+    if (mode === "motion" ? !hasMotion : !hasCam) {
       b.classList.add("dim");
-      b.dataset.why = needsCam
-        ? "Camera/mic aren't available here — open this page in Safari or Chrome, not inside another app."
-        : "Motion sensing isn't available on this device or browser.";
+      b.dataset.why =
+        mode === "motion" ? "Motion sensing isn't available on this device or browser."
+        : (mode === "mic" || mode === "audio") ? "Mic access isn't available here — open this page in Safari or Chrome, not inside another app."
+        : "Camera access isn't available here — open this page in Safari or Chrome, not inside another app.";
     }
   });
   const b = $("compat"); if (!b) return;
@@ -402,7 +405,8 @@ function checkCompat() {
   let msg = "";
   if (!window.isSecureContext) msg = "⚠ Not a secure (https) connection — sensors are blocked here.";
   else if (!hasCam) msg = "📷 <b>Sensor modes need Safari or Chrome.</b> Opened from another app (Messages, Instagram…)? Tap ••• → <b>Open in Browser</b>. The slider below always works.";
-  else if (ios && ios < 15.4) msg = "ℹ️ You're on iOS " + ios.toFixed(1) + " — for the full experience, update to <b>iOS 15.4+</b> (Settings → General → Software Update). The controls still work.";
+  else if (ios && (ios.major < 15 || (ios.major === 15 && ios.minor < 4)))
+    msg = "ℹ️ You're on iOS " + ios.major + "." + ios.minor + " — for the full experience, update to <b>iOS 15.4+</b> (Settings → General → Software Update). The controls still work.";
   if (msg) { b.innerHTML = msg; b.hidden = false; }
 }
 
