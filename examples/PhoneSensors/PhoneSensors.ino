@@ -21,8 +21,9 @@
 // set every board's room to one shared name (e.g. "workshop") in setup; clear
 // the field to go private again.
 //
-// BUTTON: press the board button any time to toggle a local 30% mist — works
-// even with no WiFi/cloud, and the change syncs to the app's status.
+// BUTTON: press the board button any time — in WiFi-setup OR connected mode — to
+// toggle a local 30% mist (works even with no WiFi/cloud); when connected, the
+// change syncs to the app instantly. Hold it at power-on to (re-)run WiFi setup.
 //
 // SAFETY: the disc's own current draw is sensed every 20 s (no extra parts) —
 // a missing/loose disc auto-shuts-off the mist, and low water is flagged live
@@ -275,12 +276,22 @@ void onCommand(const char* msg) {
       forMe = !strncmp(tgt, "all\"", 4) || (!strncmp(tgt, deviceId, n) && tgt[n] == '"');
     }
     const char* lv = strstr(msg, "\"level\":");
-    if (forMe && lv) { lastCmd = millis(); localOn = false; applyLevel(atoi(lv + 8)); }
+    if (forMe && lv) {
+      int lvl = atoi(lv + 8);
+      lastCmd = millis();
+      if (lvl != level) localOn = false;             // phone takes over only when it truly changes level
+      applyLevel(lvl);                               // (a same-level echo must not strip the button mist)
+    }
   } else if (strstr(msg, "\"t\":\"multi\"")) {
     char key[10];
     snprintf(key, sizeof(key), "\"%s\":", deviceId);
     const char* p = strstr(msg, key);
-    if (p) { lastCmd = millis(); localOn = false; applyLevel(atoi(p + strlen(key))); }
+    if (p) {
+      int lvl = atoi(p + strlen(key));
+      lastCmd = millis();
+      if (lvl != level) localOn = false;
+      applyLevel(lvl);
+    }
   }
 }
 
@@ -288,20 +299,22 @@ void onCommand(const char* msg) {
 // Last-writer-wins — a phone command takes over, and a press takes over the phone.
 void pollButton() {
   bool b = digitalRead(BUTTON) == HIGH;            // active-HIGH (PCB pull-down)
-  if (b && !btnPrev && millis() - btnMs > 250) {   // debounced press
+  if (b && !btnPrev && millis() - btnMs > 250) {   // debounced rising edge = a press
     btnMs = millis();
-    localOn = !localOn;
-    applyLevel(localOn ? BUTTON_LEVEL : 0);
+    bool turnOn = (level == 0);                    // toggle by actual mist state (agrees with web/phone)
+    localOn = turnOn;                              // remember it's a local, offline-safe mist
+    applyLevel(turnOn ? BUTTON_LEVEL : 0);
     lastCmd = millis();                            // exempt from the command watchdog
-    Serial.printf("[BUTTON] mist %s\n", localOn ? "ON" : "OFF");
-    if (ws.isConnected()) sendStatus();            // sync to the app immediately
+    Serial.printf("[BUTTON] mist %s\n", turnOn ? "ON" : "OFF");
+    if (ws.isConnected()) sendStatus();            // sync to the app the instant it changes
   }
   btnPrev = b;
 }
 
 void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
   switch (type) {
-    case WStype_CONNECTED:    Serial.println("[WS] connected — control me from the app"); break;
+    case WStype_CONNECTED:    Serial.println("[WS] connected — control me from the app");
+                              sendStatus(); break;   // sync current state (incl. a button mist) right away
     case WStype_DISCONNECTED: Serial.println("[WS] disconnected — retrying");
                               if (!localOn) applyLevel(0);  // keep a button-toggled mist running offline
                               break;
@@ -342,7 +355,7 @@ void setup() {
   delay(500);
   mist.disableBattery();   // V0.3 D1 can't tell USB from battery — re-add at V0.4
   mist.begin();
-  pinMode(BUTTON, INPUT);
+  pinMode(BUTTON, INPUT_PULLDOWN);   // defined idle-LOW so the pin can't float (reliable press + boot)
 
   uint8_t mac[6];
   WiFi.mode(WIFI_STA);                              // init WiFi first so the MAC reads real (not 0000)
@@ -367,13 +380,16 @@ void setup() {
   // connect (and fall back to the portal if the saved WiFi won't connect).
   if (ssid.isEmpty() || digitalRead(BUTTON) == HIGH) startPortal();
   else startCloud();
+
+  btnPrev = (digitalRead(BUTTON) == HIGH);   // if held to enter setup, don't fire a phantom press
 }
 
 void loop() {
+  pollButton();   // physical button toggles a local mist in ANY mode (setup AND connected)
+
   if (portalMode) { dns.processNextRequest(); portal.handleClient(); return; }
 
   ws.loop();
-  pollButton();   // board button toggles a local mist any time
 
   // Fail-safe: a healthy link refreshes lastCmd every ~2 s (phone keepalive);
   // silence past CMD_TIMEOUT means the link dropped — cut phone-driven mist.
