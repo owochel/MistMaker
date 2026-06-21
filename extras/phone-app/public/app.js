@@ -130,20 +130,35 @@ function renderTargets() {
     + makers.map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
   if ([...targetSel.options].some(o => o.value === cur)) targetSel.value = cur;
 }
+// water/disc status from the maker's own current-sense → a friendly chip + tile state
+const WATER = {
+  ok:           { cls: "ok",   label: "💧 ok" },
+  low:          { cls: "warn", label: "💧 low" },
+  no_disc:      { cls: "bad",  label: "⚠ no disc" },
+  disconnected: { cls: "bad",  label: "⚠ disc loose" },
+};
 function renderDevs() {
   devCount.textContent = makers.length;
-  if (!makers.length) { devsEl.innerHTML = `<li class="empty">No makers in room &ldquo;${esc(room)}&rdquo; yet — power one on, or set its room to &ldquo;${esc(room)}&rdquo; in the WiFi setup ☁</li>`; return; }
+  if (!makers.length) { devsEl.innerHTML = `<li class="empty">No makers in &ldquo;${esc(room)}&rdquo; yet. Power one on, or set its room to &ldquo;${esc(room)}&rdquo; in its WiFi setup ☁</li>`; renderAlert(0); return; }
+  let attention = 0;
   devsEl.innerHTML = makers.map(d => {
     const lvl = clamp(+d.level || 0);
-    const w = d.water === "ok" ? '<span class="badge ok">water ok</span>'
-            : d.water === "low" ? '<span class="badge warn">water low</span>'
-            : d.water === "?" ? "" : `<span class="badge bad">${esc(d.water)}</span>`;
+    const w = WATER[d.water];                         // undefined while unknown ("?")
+    if (w && w.cls !== "ok") attention++;
+    const ring = w && w.cls !== "ok" ? " " + w.cls : "";       // .dev.warn / .dev.bad highlight
+    const badge = w ? `<span class="badge ${w.cls}">${w.label}</span>` : "";
     const sig = Number.isFinite(+d.rssi) && d.rssi ? `${(+d.rssi).toFixed(0)} dBm` : "";
-    return `<li class="dev"><div class="dev-top"><span class="dev-name">${esc(d.name)}</span>
+    return `<li class="dev${ring}"><div class="dev-top"><span class="dev-name">${esc(d.name)}</span>
       <span class="dev-sig">📶 ${esc(sig)}</span></div>
       <div class="dev-bar"><i style="width:${lvl}%"></i></div>
-      <div class="dev-meta"><span>${lvl}%</span><span>${Math.round(+d.current_ma || 0)} mA</span>${w}</div></li>`;
+      <div class="dev-meta"><span>${lvl}%</span><span>${Math.round(+d.current_ma || 0)} mA</span>${badge}</div></li>`;
   }).join("");
+  renderAlert(attention);
+}
+function renderAlert(n) {                              // one-line summary so a dry maker stands out
+  const al = $("makerAlert"); if (!al) return;
+  if (n > 0) { al.textContent = `⚠ ${n} maker${n > 1 ? "s" : ""} need${n > 1 ? "" : "s"} attention — check water or disc.`; al.hidden = false; }
+  else al.hidden = true;
 }
 
 // ───────────────────────── input sources ─────────────────────────
