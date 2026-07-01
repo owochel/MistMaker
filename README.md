@@ -35,8 +35,8 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 #include <MistMaker.h>
 
 // One line per board — pick yours:
-MistMaker mist(MistMakerBatteryKitV04());   // ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3: also call disableBattery()
+MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board: use this + call disableBattery() (D8 floats on V0.3)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());

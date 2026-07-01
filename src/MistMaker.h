@@ -156,11 +156,14 @@ public:
   // "charging on USB" for "dying on the cell". Presets set this; set it by hand
   // for a custom board.
   void setUsbSensePin(int8_t pin) { _usbSensePin = pin; }
-  // true when the load runs from USB (mux on VIN1). With no sense pin
-  // configured this returns true (fail safe: never blind-auto-shutdown).
+  // true when the load runs from USB (mux on VIN1). With no ST/USB-sense pin
+  // configured this is ALWAYS true (fail safe: a board that can't sense its
+  // source must never blind-auto-shut-down). Consequence: onBattery() is always
+  // false on pre-V0.4 boards, so gate low-battery logic on batteryState()
+  // (which handles the no-sense case), NOT on onBattery().
   bool usbPresent();
   // true when the load runs from the cell (mux on VIN2) — the only time
-  // readBatteryVolts() is a real state-of-charge.
+  // readBatteryVolts() is a real state-of-charge. Always false without an ST pin.
   bool onBattery() { return !usbPresent(); }
 
   // ------------------- battery (needs a battery pin) -------------------

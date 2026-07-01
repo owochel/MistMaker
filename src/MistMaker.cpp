@@ -250,8 +250,11 @@ MistBatteryState MistMaker::batteryState() {
   // tracks the charger, not state-of-charge. Report CHARGING and never
   // LOW/CRITICAL. This is the fix for the V0.3 false brown-out on USB.
   if (_usbSensePin >= 0 && usbPresent()) {
-    _battState = MIST_BATT_CHARGING;
-    return _battState;
+    // Report CHARGING but do NOT overwrite _battState: a transient ST HIGH (mux
+    // chatter, or a floating pin on a V0.3 board) must not wipe the LOW/CRITICAL
+    // hysteresis latch, or a cell sitting right at the threshold gets released
+    // early when we drop back to it. The latch resumes untouched on the cell.
+    return MIST_BATT_CHARGING;
   }
 
   const float v = readBatteryVolts();
@@ -264,7 +267,7 @@ MistBatteryState MistMaker::batteryState() {
       if (v <= _battCritV)            _battState = MIST_BATT_CRITICAL;
       else if (v > _battLowV + 0.05f) _battState = MIST_BATT_OK;
       break;
-    default: // OK, UNKNOWN, or returning from CHARGING — classify fresh
+    default: // OK or UNKNOWN — classify fresh (CHARGING never latches here)
       if (v <= _battCritV)      _battState = MIST_BATT_CRITICAL;
       else if (v <= _battLowV)  _battState = MIST_BATT_LOW;
       else                      _battState = MIST_BATT_OK;

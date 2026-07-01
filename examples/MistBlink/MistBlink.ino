@@ -12,8 +12,8 @@
 #include <MistMaker.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV04());   // ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3: also uncomment disableBattery() below
+MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board: use this + uncomment disableBattery() (D8 floats on V0.3)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());

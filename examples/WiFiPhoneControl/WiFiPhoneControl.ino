@@ -24,8 +24,8 @@
 #include <esp_sleep.h>          // deep sleep on a critically low cell
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV04());   // ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3: also uncomment disableBattery() below
+MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board: use this + uncomment disableBattery() (D8 floats on V0.3)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());
@@ -115,7 +115,12 @@ void handleSet() {
 // to reflash. On CRITICAL: mist off, radio off, deep-sleep to protect the LiPo
 // (recharge + reset/power-cycle wakes it).
 void checkBattery() {
-  if (mist.batteryState() != MIST_BATT_CRITICAL) return;
+  // Require TWO consecutive CRITICAL reads (~10 s) before the irreversible
+  // deep-sleep. A single sample can lie: the boost sags BATT+ under mist load,
+  // and on a V0.3 board the sense pin floats — neither should strand the board.
+  static uint8_t critStreak = 0;
+  if (mist.batteryState() != MIST_BATT_CRITICAL) { critStreak = 0; return; }
+  if (++critStreak < 2) return;
   Serial.println("[BATTERY] Critical on cell - graceful shutdown.");
   mist.shutdown();
   WiFi.softAPdisconnect(true);

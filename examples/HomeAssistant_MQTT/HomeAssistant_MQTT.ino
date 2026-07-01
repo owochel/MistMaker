@@ -28,8 +28,8 @@
 #include <esp_sleep.h>          // deep sleep on a critically low cell
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV04());   // ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3: also uncomment disableBattery() below
+MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board: use this + uncomment disableBattery() (D8 floats on V0.3)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 
@@ -50,6 +50,7 @@ PubSubClient mqtt(wifi);
 char topicCmd[64], topicState[64], topicAvail[64], topicSensors[64];
 unsigned long lastSensorPub = 0;
 unsigned long lastBattMs = 0;
+unsigned long lastMqttTry = 0;
 
 const char* waterName(MistSenseState s) {
   switch (s) {
@@ -70,6 +71,8 @@ void publishState() {
 
 void publishSensors() {
   char buf[128];
+  // battery% is voltage-derived; on USB it tracks the charger, not true SoC —
+  // the "charging" flag lets HA automations ignore the number while plugged in.
   const bool charging = (mist.batteryState() == MIST_BATT_CHARGING);
   snprintf(buf, sizeof(buf),
            "{\"water\":\"%s\",\"battery\":%u,\"charging\":%s}",
@@ -134,22 +137,23 @@ void onMqtt(char* topic, byte* payload, unsigned int len) {
   publishState();
 }
 
+// One (re)connect attempt + republish. Non-blocking by design: loop() retries
+// on a backoff, so the low-battery watchdog keeps running when WiFi or the
+// broker is down (a blocking connect loop would strand a weak cell).
 void connectMqtt() {
-  while (!mqtt.connected()) {
-    // LWT marks the device unavailable in HA if we drop off the network.
-    if (mqtt.connect(DEV_ID, MQTT_USER, MQTT_PASS,
-                     topicAvail, 0, true, "offline")) {
-      mqtt.publish(topicAvail, "online", true);
-      mqtt.subscribe(topicCmd);
-      publishDiscovery();
-      publishState();
-      publishSensors();
-      Serial.println("[MQTT] connected + discovery published");
-    } else {
-      Serial.print("[MQTT] connect failed rc=");
-      Serial.println(mqtt.state());
-      delay(2000);
-    }
+  if (mqtt.connected()) return;
+  // LWT marks the device unavailable in HA if we drop off the network.
+  if (mqtt.connect(DEV_ID, MQTT_USER, MQTT_PASS,
+                   topicAvail, 0, true, "offline")) {
+    mqtt.publish(topicAvail, "online", true);
+    mqtt.subscribe(topicCmd);
+    publishDiscovery();
+    publishState();
+    publishSensors();
+    Serial.println("[MQTT] connected + discovery published");
+  } else {
+    Serial.print("[MQTT] connect failed rc=");
+    Serial.println(mqtt.state());
   }
 }
 
@@ -158,9 +162,16 @@ void connectMqtt() {
 // to reflash. On CRITICAL: mark offline, mist off, radio off, deep-sleep to
 // protect the LiPo (recharge + reset/power-cycle wakes it).
 void checkBattery() {
-  if (mist.batteryState() != MIST_BATT_CRITICAL) return;
+  // Require TWO consecutive CRITICAL reads (~10 s) before the irreversible
+  // deep-sleep. A single sample can lie: the boost sags BATT+ under mist load,
+  // and on a V0.3 board the sense pin floats — neither should strand the board.
+  static uint8_t critStreak = 0;
+  if (mist.batteryState() != MIST_BATT_CRITICAL) { critStreak = 0; return; }
+  if (++critStreak < 2) return;
   Serial.println("[BATTERY] Critical on cell - graceful shutdown.");
   mqtt.publish(topicAvail, "offline", true);
+  mqtt.loop();
+  delay(150);              // let the retained 'offline' flush before the radio dies
   mist.shutdown();
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -184,9 +195,17 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.print("WiFi");
-  while (WiFi.status() != WL_CONNECTED) { delay(300); Serial.print("."); }
-  Serial.print(" connected: ");
-  Serial.println(WiFi.localIP());
+  // Bounded wait: don't block boot forever on a dead AP — the ESP32 keeps
+  // auto-reconnecting, and loop()'s battery watchdog must stay reachable.
+  const uint32_t wifiT0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiT0 < 20000) {
+    delay(300); Serial.print(".");
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print(" connected: "); Serial.println(WiFi.localIP());
+  } else {
+    Serial.println(" not up yet - continuing; will retry in the background.");
+  }
 
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setBufferSize(640); // discovery payloads are bigger than the default
@@ -197,7 +216,12 @@ void setup() {
 }
 
 void loop() {
-  if (!mqtt.connected()) connectMqtt();
+  // Retry MQTT on a 2 s backoff (not every iteration) so a down broker can't
+  // starve the rest of loop(), including the low-battery watchdog below.
+  if (!mqtt.connected() && millis() - lastMqttTry > 2000) {
+    lastMqttTry = millis();
+    connectMqtt();
+  }
   mqtt.loop();
 
   // Publish sensors (and re-probe water) every 60 s.
