@@ -12,7 +12,8 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - **Mist dimming** — `setLevel(0..255)`, dim mist like an LED
 - **Current sensing in mA** with auto or manual calibration
 - **Piezo disc + water detection** — one ADC pin tells you if a disc is attached, if it fell off, and if the water ran out
-- **Battery monitoring** — voltage, percent estimate, and a graceful low-battery shutdown to prevent brown-outs
+- **Battery monitoring** — calibrated voltage, percent estimate, and a graceful low-battery shutdown to prevent brown-outs
+- **Power-source sensing** — reads the TPS2116 mux status (Battery Kit V0.4) so battery logic knows USB from the cell and never false-triggers
 - **Pin presets for every official board variant** — one line to target your PCB
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
 - Modular and reusable class-based structure; v1.0 sketches compile unchanged
@@ -34,7 +35,8 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 #include <MistMaker.h>
 
 // One line per board — pick yours:
-MistMaker mist(MistMakerBatteryKitV03());
+MistMaker mist(MistMakerBatteryKitV04());   // ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3: also call disableBattery()
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());
@@ -96,24 +98,31 @@ mist.setCurrentSenseFactor(3.0);  // INA180A3 (100 V/V) × 30 mΩ
 ## 🔋 Battery Monitoring (Battery Kit)
 
 ```cpp
-float v   = mist.readBatteryVolts();   // via on-board divider
+float v   = mist.readBatteryVolts();   // calibrated mV via the on-board divider
 uint8_t p = mist.batteryPercent();     // rough LiPo gauge for UIs
 
-if (mist.batteryCritical()) {          // hysteresis built in
+if (mist.batteryCritical()) {          // hysteresis built in; false on USB
   mist.shutdown();                     // mist off + boost rail off
   esp_deep_sleep_start();              // sleep instead of brown-out
 }
 ```
 
 Defaults: divider ratio 2.0, low = 3.45 V, critical = 3.20 V. Override with
-`setBatteryDivider()` / `setBatteryThresholds()`.
+`setBatteryDivider()` / `setBatteryThresholds()`. Reads use the ESP32's
+calibrated `analogReadMilliVolts()` (linear even on the C6).
 
-> ⚠️ **Battery Kit V0.3:** the D1 divider reads `BATT+`, but the TPS2116 power
-> mux means the board runs off USB-C whenever it's plugged in — so D1 can't tell
-> "USB-only, no cell" from "on battery, dying," which caused false low-battery
-> shutdowns. Until V0.4 adds a USB-present pin, call `mist.disableBattery();`
-> before `begin()` to switch battery sensing off (every `battery*` call then
-> behaves as on a board with no cell). The networked examples already do this.
+> **Why the board can't just read `BATT+`:** the TPS2116 power mux runs the
+> board off USB-C whenever it's plugged in, so `BATT+` tracks the *charger* (not
+> state-of-charge) on USB — reading it blindly caused false low-battery
+> shutdowns.
+>
+> - **Battery Kit V0.4** routes the mux **ST** (status) pin to **D8**, so the
+>   `MistMakerBatteryKitV04()` preset self-gates: `batteryState()` returns
+>   `MIST_BATT_CHARGING` on USB and only ever reports `LOW`/`CRITICAL` on the
+>   cell. Use `usbPresent()` / `onBattery()` to read the source yourself.
+> - **Battery Kit V0.3** has no ST pin, so call `mist.disableBattery();` before
+>   `begin()` to switch battery sensing off (every `battery*` call then behaves
+>   as on a board with no cell).
 
 ---
 
@@ -204,13 +213,19 @@ bool  discPresent();
 MistSenseState senseState();
 float lastProbeMa();
 
+// --- power source (mux status, V0.4+) ---
+void    setUsbSensePin(int8_t pin);                // TPS2116 ST (Battery Kit V0.4 = D8)
+bool    usbPresent();            // load on USB (mux VIN1)? true if no sense pin
+bool    onBattery();             // load on the cell (mux VIN2)? = valid SoC
+
 // --- battery ---
-float   readBatteryVolts(uint8_t samples = 16);
+float   readBatteryVolts(uint8_t samples = 16);    // calibrated mV
 uint8_t batteryPercent();
-MistBatteryState batteryState(); // OK / LOW / CRITICAL, with hysteresis
+MistBatteryState batteryState(); // OK/LOW/CRITICAL/CHARGING, ST-gated + hysteresis
 bool    batteryLow();   bool batteryCritical();
 void    setBatteryDivider(float ratio);            // default 2.0
 void    setBatteryThresholds(float lowV, float critV);
+void    disableBattery();        // pre-V0.4 escape hatch (turns sensing off)
 void    shutdown();              // mist + boost + LED off (call before sleep)
 ```
 

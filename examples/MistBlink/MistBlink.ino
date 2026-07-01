@@ -12,7 +12,8 @@
 #include <MistMaker.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV03());
+MistMaker mist(MistMakerBatteryKitV04());   // ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3: also uncomment disableBattery() below
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());
@@ -23,7 +24,9 @@ const unsigned long OFF_TIME_MS = 3000;
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  mist.disableBattery();   // V0.3 D1 can't tell USB from battery — re-add at V0.4
+  // On Battery Kit V0.3 (no ST pin) uncomment so the unreliable D1 reading
+  // can't cause a false low-battery shutdown:
+  // mist.disableBattery();
   mist.begin();
   Serial.println("MistBlink: 6 s ON / 3 s OFF");
 }

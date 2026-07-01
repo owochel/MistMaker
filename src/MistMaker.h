@@ -12,6 +12,9 @@
 //   * Current sensing in real units (mA) with auto or manual calibration
 //   * Piezo-disc presence + water-level detection (probe + classifier)
 //   * Battery voltage monitoring (resistor divider) + low-battery helpers
+// v1.2 adds:
+//   * Power-source sensing via the TPS2116 mux ST pin (Battery Kit V0.4) so
+//     battery monitoring self-gates on USB-vs-cell and can't false-brown-out
 //
 // Hardware background: the boards sense piezo current through a shunt +
 // INA180A3 current-sense amplifier into an ADC pin. A dry disc, a missing
@@ -31,6 +34,7 @@ struct MistMakerPins {
   int8_t led;      // status LED (-1 = none)
   int8_t button;   // user button (-1 = none) — read it yourself, kept for reference
   int8_t battery;  // battery-voltage ADC via divider (-1 = none)
+  int8_t usbSense; // power-mux status (TPS2116 ST): HIGH=USB, LOW=cell (-1 = none)
 };
 
 // ---------------------------------------------------------------------------
@@ -43,22 +47,30 @@ struct MistMakerPins {
 // Mist Maker Extension (Seeed-Expansion) V0.1 — XIAO add-on, USB powered,
 // no battery, no boost-enable (piezo rail always on).
 inline MistMakerPins MistMakerExtensionV01() {
-  return MistMakerPins{ D0, -1, D2, -1, -1, -1 };
+  return MistMakerPins{ D0, -1, D2, -1, -1, -1, -1 };
 }
 
 // Mist Maker Battery Kit V0.3 — LiPo + USB-C, battery divider on D1.
+// No mux-status pin: on V0.3 the TPS2116 ST line isn't routed to the XIAO,
+// so battery reads can't tell USB from the cell — call disableBattery().
 inline MistMakerPins MistMakerBatteryKitV03() {
-  return MistMakerPins{ D0, D3, D2, D7, D6, D1 };
+  return MistMakerPins{ D0, D3, D2, D7, D6, D1, -1 };
+}
+
+// Mist Maker Battery Kit V0.4 — V0.3 plus the TPS2116 ST (power-mux status)
+// on D8, so battery monitoring gates itself on the real power source.
+inline MistMakerPins MistMakerBatteryKitV04() {
+  return MistMakerPins{ D0, D3, D2, D7, D6, D1, D8 };
 }
 
 // Block Kit V0.1 — OHS 2026 demo board (reed on D10, IS31FL3731 LEDs on I2C).
 inline MistMakerPins MistMakerBlockKitV01() {
-  return MistMakerPins{ D0, D3, D2, D7, D6, -1 };
+  return MistMakerPins{ D0, D3, D2, D7, D6, -1, -1 };
 }
 
 // Legacy V1.x single PCB (OHS 2025 workshop board).
 inline MistMakerPins MistMakerLegacyV1() {
-  return MistMakerPins{ D1, D3, D2, D7, D6, -1 };
+  return MistMakerPins{ D1, D3, D2, D7, D6, -1, -1 };
 }
 #endif
 
@@ -78,6 +90,7 @@ enum MistBatteryState : uint8_t {
   MIST_BATT_OK,
   MIST_BATT_LOW,            // below low threshold — warn the user
   MIST_BATT_CRITICAL,       // below cutoff — shut down gracefully NOW
+  MIST_BATT_CHARGING,       // on USB (mux on VIN1) — cell is charging, not a SoC
 };
 
 class MistMaker {
@@ -135,12 +148,30 @@ public:
   MistSenseState senseState() const { return _senseState; }
   float lastProbeMa() const { return _lastProbeMa; }
 
+  // ------------------- power source (mux status, V0.4+) -------------------
+  // The TPS2116 power mux picks USB (VIN1) over the cell (VIN2) whenever USB is
+  // present, so the battery is the *source* only when USB is unplugged. Its ST
+  // pin (HIGH = USB, LOW = cell) says which — wire it to a GPIO (Battery Kit
+  // V0.4 = D8) and battery monitoring gates itself on it, never mistaking
+  // "charging on USB" for "dying on the cell". Presets set this; set it by hand
+  // for a custom board.
+  void setUsbSensePin(int8_t pin) { _usbSensePin = pin; }
+  // true when the load runs from USB (mux on VIN1). With no sense pin
+  // configured this returns true (fail safe: never blind-auto-shutdown).
+  bool usbPresent();
+  // true when the load runs from the cell (mux on VIN2) — the only time
+  // readBatteryVolts() is a real state-of-charge.
+  bool onBattery() { return !usbPresent(); }
+
   // ------------------- battery (needs a battery pin) -------------------
-  // Turn battery sensing OFF at runtime. Battery Kit V0.3's D1 divider can't
-  // tell USB-C power from a real cell, so the reading is unreliable (it caused
-  // false low-battery shutdowns). After this call every battery_* method
-  // behaves exactly as on a board with no cell: readBatteryVolts()/percent()
-  // return 0 and batteryState() returns MIST_BATT_UNKNOWN (never CRITICAL).
+  // Turn battery sensing OFF at runtime — the pre-V0.4 escape hatch. Where the
+  // mux status isn't wired to a GPIO (Battery Kit V0.3), the D1 divider can't
+  // tell USB-C power from a real cell, so the reading is unreliable and caused
+  // false low-battery shutdowns. After this call every battery_* method behaves
+  // as on a board with no cell: readBatteryVolts()/percent() return 0 and
+  // batteryState() returns MIST_BATT_UNKNOWN. On V0.4 prefer wiring ST instead
+  // (setUsbSensePin / the V0.4 preset) — then batteryState() self-gates and you
+  // keep real monitoring while on the cell.
   void disableBattery() { _battPin = -1; }
   // Divider ratio = (Rtop+Rbottom)/Rbottom. Battery Kit V0.3 uses 2.0 (1:1).
   void setBatteryDivider(float ratio) { _battDivider = ratio; }
@@ -149,7 +180,9 @@ public:
   float readBatteryVolts(uint8_t samples = 16);
   // 0..100% rough LiPo state-of-charge estimate from voltage.
   uint8_t batteryPercent();
-  // Classified with hysteresis so it won't flap around the threshold.
+  // Classified with hysteresis so it won't flap around the threshold. With a
+  // USB-sense pin wired and USB present, returns MIST_BATT_CHARGING and never
+  // LOW/CRITICAL (the cell is a charge target, not the source).
   MistBatteryState batteryState();
   bool batteryLow()      { MistBatteryState s = batteryState();
                            return s == MIST_BATT_LOW || s == MIST_BATT_CRITICAL; }
@@ -163,7 +196,7 @@ private:
   float probeAtDuty(uint8_t duty, uint16_t settleMs, uint16_t sampleMs);
   void applyDuty(uint8_t duty);
 
-  int8_t _mistPin, _enPin, _sensePin, _ledPin, _buttonPin, _battPin;
+  int8_t _mistPin, _enPin, _sensePin, _ledPin, _buttonPin, _battPin, _usbSensePin;
   int _pwmFreq, _pwmRes, _dutyCycle;
   uint8_t _dutyMax;
   uint8_t _level;

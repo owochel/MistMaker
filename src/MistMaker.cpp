@@ -6,7 +6,7 @@
 MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
                      int pwmFreq, int pwmRes, int duty)
   : _mistPin(mistPin), _enPin(enPin), _sensePin(sensePin), _ledPin(ledPin),
-    _buttonPin(-1), _battPin(-1),
+    _buttonPin(-1), _battPin(-1), _usbSensePin(-1),
     _pwmFreq(pwmFreq), _pwmRes(pwmRes), _dutyCycle(duty),
     _dutyMax(127), _level(0), _state(false), _lastPrintTime(0),
     _senseFactor(3.0f),
@@ -18,8 +18,9 @@ MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
 
 MistMaker::MistMaker(const MistMakerPins &p, int pwmFreq, int pwmRes, int duty)
   : MistMaker(p.mist, p.boostEn, p.sense, p.led, pwmFreq, pwmRes, duty) {
-  _buttonPin = p.button;
-  _battPin   = p.battery;
+  _buttonPin   = p.button;
+  _battPin     = p.battery;
+  _usbSensePin = p.usbSense;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,9 @@ void MistMaker::begin() {
   if (_sensePin >= 0)  pinMode(_sensePin, INPUT);
   if (_battPin >= 0)   pinMode(_battPin, INPUT);
   if (_buttonPin >= 0) pinMode(_buttonPin, INPUT); // PCB has its own pull-down
+  // Mux ST (TPS2116 pin 8) is level-shifted by an external divider on V0.4, so
+  // read it as a plain high-Z INPUT — an internal pull would swamp the divider.
+  if (_usbSensePin >= 0) pinMode(_usbSensePin, INPUT);
 
   // NOTE: we deliberately do NOT call analogReadResolution() or
   // analogSetPinAttenuation() — on ESP32-C6 + arduino-esp32 v3.x those calls
@@ -210,9 +214,13 @@ void MistMaker::setBatteryThresholds(float lowV, float criticalV) {
 float MistMaker::readBatteryVolts(uint8_t samples) {
   if (_battPin < 0) return 0.0f;
   if (samples == 0) samples = 1;
-  uint32_t sum = 0;
-  for (uint8_t i = 0; i < samples; i++) sum += analogRead(_battPin);
-  const float pinV = (float(sum) / samples) * 3.3f / 4095.0f;
+  // analogReadMilliVolts() applies the chip's factory eFuse ADC calibration —
+  // linear millivolts even on ESP32-C6, where raw analogRead() is nonlinear
+  // (arduino-esp32 #11324). It does NOT need analogReadResolution() (the call
+  // we avoid on C6 v3.x), so this stays compatible with begin()'s note.
+  uint32_t sum_mV = 0;
+  for (uint8_t i = 0; i < samples; i++) sum_mV += analogReadMilliVolts(_battPin);
+  const float pinV = (float(sum_mV) / samples) / 1000.0f;
   return pinV * _battDivider;
 }
 
@@ -227,8 +235,25 @@ uint8_t MistMaker::batteryPercent() {
   return (uint8_t)(pct + 0.5f);
 }
 
+bool MistMaker::usbPresent() {
+  // ST HIGH = mux sourcing VIN1 (USB), LOW = VIN2 (cell). See TPS2116 §7.3.3.
+  // No sense pin -> assume USB present (fail safe: don't blind-shutdown).
+  if (_usbSensePin < 0) return true;
+  return digitalRead(_usbSensePin) == HIGH;
+}
+
 MistBatteryState MistMaker::batteryState() {
   if (_battPin < 0) return MIST_BATT_UNKNOWN;
+
+  // Gate on the power mux: with a USB-sense pin wired (V0.4), a HIGH ST means
+  // the load runs from USB and the cell is a charge target — its voltage
+  // tracks the charger, not state-of-charge. Report CHARGING and never
+  // LOW/CRITICAL. This is the fix for the V0.3 false brown-out on USB.
+  if (_usbSensePin >= 0 && usbPresent()) {
+    _battState = MIST_BATT_CHARGING;
+    return _battState;
+  }
+
   const float v = readBatteryVolts();
   // 50 mV hysteresis so we don't flap when the mist load sags the rail.
   switch (_battState) {
@@ -239,7 +264,7 @@ MistBatteryState MistMaker::batteryState() {
       if (v <= _battCritV)            _battState = MIST_BATT_CRITICAL;
       else if (v > _battLowV + 0.05f) _battState = MIST_BATT_OK;
       break;
-    default: // OK or UNKNOWN
+    default: // OK, UNKNOWN, or returning from CHARGING — classify fresh
       if (v <= _battCritV)      _battState = MIST_BATT_CRITICAL;
       else if (v <= _battLowV)  _battState = MIST_BATT_LOW;
       else                      _battState = MIST_BATT_OK;
@@ -275,9 +300,14 @@ void MistMaker::printStatus() {
   if (_battPin >= 0) {
     Serial.print(F(". Battery: "));
     Serial.print(readBatteryVolts(), 2);
-    Serial.print(F(" V ("));
-    Serial.print(batteryPercent());
-    Serial.print(F("%)"));
+    Serial.print(F(" V"));
+    if (_usbSensePin >= 0 && usbPresent()) {
+      Serial.print(F(" (USB charging)"));
+    } else {
+      Serial.print(F(" ("));
+      Serial.print(batteryPercent());
+      Serial.print(F("%)"));
+    }
   }
   Serial.println();
 

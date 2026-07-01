@@ -6,15 +6,16 @@
 //     us an on/off toggle + brightness slider for free)
 //   * a water/disc status sensor (from current sensing)
 //
-// NOTE: battery sensing is intentionally OFF on this branch — Battery Kit V0.3
-// can't tell USB-C power from a real cell on D1, so the reading is unreliable.
-// TODO(V0.4): re-add the battery % sensor + low-battery deep-sleep once the
-// board has a real USB-present sense pin.
+// Battery: Battery Kit V0.4 routes the TPS2116 mux STATUS pin to D8, so the
+// library can tell USB from the cell. This example publishes a battery %
+// sensor and deep-sleeps on a critically low cell — batteryState() reads
+// CHARGING on USB, so it never sleeps while plugged in. On V0.3 (no ST pin)
+// switch the preset below and uncomment mist.disableBattery() in setup().
 //
 // Requirements:
 //   * MQTT broker (the standard Mosquitto add-on) + MQTT integration in HA
 //   * Arduino library: PubSubClient (Library Manager)
-//   * MistMaker >= 1.1.0
+//   * MistMaker >= 1.2.0
 //
 // Prefer YAML/no-code? See the ESPHome config in the main repo:
 // Programmable-Mist-Maker/firmware-examples/home-assistant/esphome-mistmaker.yaml
@@ -24,9 +25,11 @@
 #include <MistMaker.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <esp_sleep.h>          // deep sleep on a critically low cell
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV03());
+MistMaker mist(MistMakerBatteryKitV04());   // ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3: also uncomment disableBattery() below
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 
@@ -46,6 +49,7 @@ PubSubClient mqtt(wifi);
 
 char topicCmd[64], topicState[64], topicAvail[64], topicSensors[64];
 unsigned long lastSensorPub = 0;
+unsigned long lastBattMs = 0;
 
 const char* waterName(MistSenseState s) {
   switch (s) {
@@ -65,8 +69,12 @@ void publishState() {
 }
 
 void publishSensors() {
-  char buf[96];
-  snprintf(buf, sizeof(buf), "{\"water\":\"%s\"}", waterName(mist.senseState()));
+  char buf[128];
+  const bool charging = (mist.batteryState() == MIST_BATT_CHARGING);
+  snprintf(buf, sizeof(buf),
+           "{\"water\":\"%s\",\"battery\":%u,\"charging\":%s}",
+           waterName(mist.senseState()), mist.batteryPercent(),
+           charging ? "true" : "false");
   mqtt.publish(topicSensors, buf, true);
 }
 
@@ -94,6 +102,17 @@ void publishDiscovery() {
     "{\"name\":\"Mist Maker Water\",\"uniq_id\":\"%s_water\","
     "\"stat_t\":\"%s\",\"avty_t\":\"%s\","
     "\"val_tpl\":\"{{ value_json.water }}\",%s}",
+    DEV_ID, topicSensors, topicAvail, devBuf);
+  mqtt.publish(topic, payload, true);
+
+  // Battery % sensor (Battery Kit V0.4 with a cell). device_class battery gives
+  // HA the battery icon; the value rides on the same sensors topic.
+  snprintf(topic, sizeof(topic), "homeassistant/sensor/%s_battery/config", DEV_ID);
+  snprintf(payload, sizeof(payload),
+    "{\"name\":\"Mist Maker Battery\",\"uniq_id\":\"%s_batt\","
+    "\"dev_cla\":\"battery\",\"unit_of_meas\":\"%%\","
+    "\"stat_t\":\"%s\",\"avty_t\":\"%s\","
+    "\"val_tpl\":\"{{ value_json.battery }}\",%s}",
     DEV_ID, topicSensors, topicAvail, devBuf);
   mqtt.publish(topic, payload, true);
 }
@@ -134,10 +153,27 @@ void connectMqtt() {
   }
 }
 
+// Low-battery guard. batteryState() is ST-gated: it returns MIST_BATT_CHARGING
+// on USB, so this only fires on a genuinely dying cell — never while plugged in
+// to reflash. On CRITICAL: mark offline, mist off, radio off, deep-sleep to
+// protect the LiPo (recharge + reset/power-cycle wakes it).
+void checkBattery() {
+  if (mist.batteryState() != MIST_BATT_CRITICAL) return;
+  Serial.println("[BATTERY] Critical on cell - graceful shutdown.");
+  mqtt.publish(topicAvail, "offline", true);
+  mist.shutdown();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(100);
+  esp_deep_sleep_start();
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  mist.disableBattery();   // V0.3: D1 can't tell USB from battery (see note up top)
+  // On Battery Kit V0.3 (no ST pin) uncomment this so the unreliable D1 reading
+  // can't trigger a false low-battery shutdown:
+  // mist.disableBattery();
   mist.begin();
 
   snprintf(topicCmd,     sizeof(topicCmd),     "mistmaker/%s/set",     DEV_ID);
@@ -169,5 +205,11 @@ void loop() {
     lastSensorPub = millis();
     mist.probe();
     publishSensors();
+  }
+
+  // Low-battery guard every 5 s (no-op on USB / boards without a cell).
+  if (millis() - lastBattMs > 5000) {
+    lastBattMs = millis();
+    checkBattery();
   }
 }
