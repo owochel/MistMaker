@@ -12,11 +12,16 @@
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
 // v2.0 — cleanup release:
-//   * every tuning value is a named constant in MistMakerDefaults (below)
-//   * constructor `duty` parameter now actually sets the duty cap (it was
-//     silently ignored in 1.x)
+//   * hardware tuning values are named constants in MistMakerDefaults (below);
+//     probe/calibration timing lives at the top of MistMaker.cpp
+//   * the constructor's duty-cap parameter now actually takes effect (it was
+//     silently ignored in 1.x). Valid caps are 1..(2^pwmRes - 1); anything
+//     else — including the default DUTY_AUTO — resolves to 50% of full scale
+//     (= 127 at 8-bit, the 1.x behavior), so legacy garbage values can't
+//     wrap into a wrong drive level.
 //   * removed: applyLevel() alias -> use setLevel();
-//              readCurrentVoltage() -> use readCurrentMa()
+//              readCurrentVoltage() -> use readCurrentMa() (NOTE: different
+//              unit — see README migration note)
 // v1.2   Power-source sensing via the TPS2116 mux ST pin (Battery Kit V0.4):
 //        battery monitoring self-gates on USB-vs-cell, can't false-brown-out.
 // v1.1   Board presets, dimming, current sensing in mA, disc/water detection,
@@ -36,14 +41,17 @@
 // on different hardware.
 // ---------------------------------------------------------------------------
 namespace MistMakerDefaults {
-  // Piezo drive. 108.7 kHz = disc resonance; 8-bit duty; cap at 127 (50%)
-  // because beyond 50% the resonant push-pull gets weaker, not stronger.
+  // Piezo drive. 108.7 kHz = disc resonance. The duty cap defaults to 50% of
+  // full scale (127 at 8-bit) because beyond 50% the resonant push-pull gets
+  // weaker, not stronger. DUTY_AUTO = "resolve to that 50% for whatever
+  // resolution is configured"; any out-of-range cap resolves the same way.
   constexpr uint32_t PWM_FREQ_HZ  = 108700;
   constexpr uint8_t  PWM_RES_BITS = 8;
-  constexpr uint8_t  DUTY_MAX     = 127;
+  constexpr int      DUTY_AUTO    = 0;
 
   // Current sense: V per A = amp gain x shunt = INA180A3 (100 V/V) x 30 mOhm.
   constexpr float SENSE_VOLTS_PER_AMP = 3.0f;
+  constexpr uint16_t SENSE_SAMPLE_MS  = 50;   // default readCurrentMa() window
 
   // Classifier thresholds (mA) — see autoCalibrateSense() for their meaning.
   constexpr float TH_DISC_PRESENT_MA = 10.0f;   // >= this at probe duty -> disc there
@@ -137,17 +145,18 @@ enum MistBatteryState : uint8_t {
 class MistMaker {
 public:
   // Pin-preset constructor (preferred). `dutyMax` caps the PWM duty that
-  // setLevel(255)/turnOn() reach — see MistMakerDefaults::DUTY_MAX.
+  // setLevel(255)/turnOn() reach. Valid range 1..(2^pwmRes - 1); anything
+  // else (including DUTY_AUTO) = 50% of full scale, the resonant sweet spot.
   MistMaker(const MistMakerPins &pins,
             uint32_t pwmFreq = MistMakerDefaults::PWM_FREQ_HZ,
             uint8_t  pwmRes  = MistMakerDefaults::PWM_RES_BITS,
-            uint8_t  dutyMax = MistMakerDefaults::DUTY_MAX);
+            int      dutyMax = MistMakerDefaults::DUTY_AUTO);
 
   // Bare-pins constructor for breadboards / custom wiring (v1.0 signature).
   MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
             uint32_t pwmFreq = MistMakerDefaults::PWM_FREQ_HZ,
             uint8_t  pwmRes  = MistMakerDefaults::PWM_RES_BITS,
-            uint8_t  dutyMax = MistMakerDefaults::DUTY_MAX);
+            int      dutyMax = MistMakerDefaults::DUTY_AUTO);
 
   void begin();
 
@@ -162,14 +171,15 @@ public:
   // level 0..255 maps linearly onto 0..dutyMax. 0 = off.
   void setLevel(uint8_t level);
   uint8_t getLevel() const { return _level; }
-  void setMaxDuty(uint8_t dutyMax) { _dutyMax = dutyMax; }
+  // Same validity policy as the constructor: out-of-range -> 50% auto.
+  void setMaxDuty(int dutyMax) { _dutyMax = resolveDutyCap(dutyMax); }
 
   // ------------------- current sensing -------------------
   // Sense-amp transfer factor in V per A (gain x shunt). Change if your
   // build differs from MistMakerDefaults::SENSE_VOLTS_PER_AMP.
   void setCurrentSenseFactor(float voltsPerAmp) { _senseFactor = voltsPerAmp; }
   // Mean current over `sampleMs` of continuous ADC reads, in mA. Blocking.
-  float readCurrentMa(uint16_t sampleMs = 50);
+  float readCurrentMa(uint16_t sampleMs = MistMakerDefaults::SENSE_SAMPLE_MS);
 
   // Manual thresholds (mA). See autoCalibrateSense() for what they mean.
   void setSenseThresholds(float discPresentMa, float waterLowMa,
@@ -239,13 +249,16 @@ public:
   void shutdown();
 
 private:
-  float probeAtDuty(uint8_t duty, uint16_t settleMs, uint16_t sampleMs);
-  void applyDuty(uint8_t duty);
+  float probeAtDuty(uint16_t duty, uint16_t settleMs, uint16_t sampleMs);
+  void applyDuty(uint16_t duty);
+  // Clamp a requested duty cap to 1..(2^pwmRes - 1); out-of-range (incl.
+  // DUTY_AUTO and 1.x-era ignored values) -> 50% of full scale.
+  uint16_t resolveDutyCap(int requested) const;
 
   int8_t _mistPin, _enPin, _sensePin, _ledPin, _buttonPin, _battPin, _usbSensePin;
   uint32_t _pwmFreq;
   uint8_t _pwmRes;
-  uint8_t _dutyMax;
+  uint16_t _dutyMax;
   uint8_t _level;
   bool _state;
   unsigned long _startTime;

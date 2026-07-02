@@ -22,17 +22,25 @@ namespace {
   // counts for current sense; battery uses analogReadMilliVolts (calibrated).
   constexpr float ADC_FULL_SCALE_V = 3.3f;
   constexpr float ADC_MAX_COUNT    = 4095.0f;
+
+  // printStatus() uses a shorter averaging window than a real measurement —
+  // it's a glance, not a reading.
+  constexpr uint16_t STATUS_SAMPLE_MS = 20;
+
+  // Below any plausible cell voltage -> battery pin floating / not connected.
+  constexpr float BATT_ABSENT_V = 0.5f;
 }
 
 // ---------------------------------------------------------------------------
 // Constructors
 // ---------------------------------------------------------------------------
 MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
-                     uint32_t pwmFreq, uint8_t pwmRes, uint8_t dutyMax)
+                     uint32_t pwmFreq, uint8_t pwmRes, int dutyMax)
   : _mistPin(mistPin), _enPin(enPin), _sensePin(sensePin), _ledPin(ledPin),
     _buttonPin(-1), _battPin(-1), _usbSensePin(-1),
-    _pwmFreq(pwmFreq), _pwmRes(pwmRes),
-    _dutyMax(dutyMax), _level(0), _state(false), _startTime(0),
+    _pwmFreq(pwmFreq), _pwmRes(pwmRes == 0 ? 1 : pwmRes),
+    // _pwmRes is initialized above (declaration order), so this is safe:
+    _dutyMax(resolveDutyCap(dutyMax)), _level(0), _state(false), _startTime(0),
     _senseFactor(MistMakerDefaults::SENSE_VOLTS_PER_AMP),
     _thDiscPresentMa(MistMakerDefaults::TH_DISC_PRESENT_MA),
     _thWaterLowMa(MistMakerDefaults::TH_WATER_LOW_MA),
@@ -46,11 +54,19 @@ MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
     _battState(MIST_BATT_UNKNOWN) {}
 
 MistMaker::MistMaker(const MistMakerPins &p,
-                     uint32_t pwmFreq, uint8_t pwmRes, uint8_t dutyMax)
+                     uint32_t pwmFreq, uint8_t pwmRes, int dutyMax)
   : MistMaker(p.mist, p.boostEn, p.sense, p.led, pwmFreq, pwmRes, dutyMax) {
   _buttonPin   = p.button;
   _battPin     = p.battery;
   _usbSensePin = p.usbSense;
+}
+
+uint16_t MistMaker::resolveDutyCap(int requested) const {
+  const uint16_t fullScale = (uint16_t)((1u << _pwmRes) - 1u);
+  if (requested >= 1 && requested <= (int)fullScale) return (uint16_t)requested;
+  // DUTY_AUTO, 0, negatives, or beyond full scale (incl. values 1.x ignored):
+  // 50% of full scale — the resonant sweet spot (127 at 8-bit).
+  return (uint16_t)(fullScale / 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +97,7 @@ void MistMaker::begin() {
 // ---------------------------------------------------------------------------
 // Basic control
 // ---------------------------------------------------------------------------
-void MistMaker::applyDuty(uint8_t duty) {
+void MistMaker::applyDuty(uint16_t duty) {
   ledcWrite(_mistPin, duty);
 }
 
@@ -115,8 +131,8 @@ void MistMaker::setLevel(uint8_t level) {
   if (level == 0) { turnOff(); return; }
   if (_enPin >= 0) digitalWrite(_enPin, HIGH);
   if (_ledPin >= 0) digitalWrite(_ledPin, HIGH);
-  // 1..255 -> 1.._dutyMax, rounding so level 255 lands exactly on dutyMax.
-  uint8_t duty = (uint8_t)(((uint16_t)level * _dutyMax + 127) / 255);
+  // 1..255 -> 1.._dutyMax; + 255/2 rounds half-up so 255 lands on dutyMax.
+  uint16_t duty = (uint16_t)(((uint32_t)level * _dutyMax + (255 / 2)) / 255);
   if (duty == 0) duty = 1;
   applyDuty(duty);
   _state = true;
@@ -148,7 +164,7 @@ void MistMaker::setSenseThresholds(float discPresentMa, float waterLowMa,
 // Drive at `duty` for settleMs, average current for sampleMs, then restore
 // whatever the mist was doing before. The boost rail is held on during the
 // probe so back-to-back probes don't churn the converter.
-float MistMaker::probeAtDuty(uint8_t duty, uint16_t settleMs, uint16_t sampleMs) {
+float MistMaker::probeAtDuty(uint16_t duty, uint16_t settleMs, uint16_t sampleMs) {
   if (_sensePin < 0) return 0.0f;
   const bool boostWasOff = (_enPin >= 0) && (digitalRead(_enPin) == LOW);
   if (boostWasOff) { digitalWrite(_enPin, HIGH); delay(BOOST_SOFTSTART_MS); }
@@ -250,12 +266,10 @@ uint8_t MistMaker::batteryPercent() {
   // Rough open-ish-circuit LiPo curve, clamped EMPTY..FULL. Good enough for
   // a UI gauge; don't use it for cutoff decisions (use batteryState()).
   const float v = readBatteryVolts();
-  if (v <= 0.5f) return 0; // no battery pin / not connected
-  float pct = (v - MistMakerDefaults::BATT_EMPTY_V) /
+  if (v <= BATT_ABSENT_V) return 0; // no battery pin / not connected
+  const float pct = (v - MistMakerDefaults::BATT_EMPTY_V) /
               (MistMakerDefaults::BATT_FULL_V - MistMakerDefaults::BATT_EMPTY_V) * 100.0f;
-  if (pct < 0.0f) pct = 0.0f;
-  if (pct > 100.0f) pct = 100.0f;
-  return (uint8_t)(pct + 0.5f);
+  return (uint8_t)(constrain(pct, 0.0f, 100.0f) + 0.5f); // round half-up
 }
 
 bool MistMaker::usbPresent() {
@@ -321,7 +335,7 @@ void MistMaker::printStatus() {
 
   if (_sensePin >= 0) {
     Serial.print(F(". Current: "));
-    Serial.print(readCurrentMa(20), 1);
+    Serial.print(readCurrentMa(STATUS_SAMPLE_MS), 1);
     Serial.print(F(" mA"));
   }
   if (_battPin >= 0) {

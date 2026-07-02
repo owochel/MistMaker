@@ -18,10 +18,19 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
 - Modular and reusable class-based structure
 
-> **Upgrading to v2.0?** Two renames: `applyLevel(x)` → `setLevel(x)` and
-> `readCurrentVoltage()` → `readCurrentMa()`. The constructor's last argument
-> now genuinely sets the duty cap (it was ignored in 1.x). Everything else is
-> source-compatible.
+> **Upgrading to v2.0?**
+> - `applyLevel(x)` → `setLevel(x)` (true rename, same 0..255 meaning).
+> - `readCurrentVoltage()` is **removed, not renamed** — it returned the raw
+>   sense-pin voltage with a legacy ×2 scale; `readCurrentMa()` returns
+>   milliamps via the 3.0 V/A sense factor. Convert old thresholds with
+>   `mA ≈ oldVolts × 166.7` (e.g. an old `> 0.4` check becomes `> 67` mA).
+> - The constructor's last argument (duty cap) now **takes effect** — 1.x
+>   accepted and ignored it. Valid caps are `1..(2^pwmRes − 1)`; anything
+>   else (including omitting it) resolves to the 50% sweet spot, which is
+>   exactly the 1.x behavior. If an old sketch passed a valid value like
+>   `255` "for full power", it will now really drive that duty — remove the
+>   argument to keep the 1.x drive level.
+> - Everything else is source-compatible.
 
 ---
 
@@ -194,13 +203,13 @@ If you are using a different board and wish to adapt the library, you may need t
 
 ## 🧪 API Reference
 
-All defaults live in `namespace MistMakerDefaults` (top of `MistMaker.h`) —
-one documented place for every tuning value the library assumes.
+Hardware defaults live in `namespace MistMakerDefaults` (top of `MistMaker.h`);
+probe/calibration timing constants sit at the top of `MistMaker.cpp`.
 
 ```cpp
 // --- construction ---
 MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
-          uint8_t pwmRes = 8, uint8_t dutyMax = 127);
+          uint8_t pwmRes = 8, int dutyMax = DUTY_AUTO); // AUTO = 50% sweet spot
 MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // bare pins
 
 // --- control ---
