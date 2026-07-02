@@ -24,14 +24,14 @@ void setup() {
 void loop() {
   Serial.println("Ramping up...");
   for (int i = 0; i <= 255; i += 25) {
-    mist.applyLevel(i);
+    mist.setLevel(i);
     Serial.printf("Level: %d\n", i);
     delay(500);
   }
   
   Serial.println("Ramping down...");
   for (int i = 255; i >= 0; i -= 25) {
-    mist.applyLevel(i);
+    mist.setLevel(i);
     Serial.printf("Level: %d\n", i);
     delay(500);
   }

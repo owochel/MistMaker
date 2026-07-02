@@ -16,7 +16,12 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - **Power-source sensing** — reads the TPS2116 mux status (Battery Kit V0.4) so battery logic knows USB from the cell and never false-triggers
 - **Pin presets for every official board variant** — one line to target your PCB
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
-- Modular and reusable class-based structure; v1.0 sketches compile unchanged
+- Modular and reusable class-based structure
+
+> **Upgrading to v2.0?** Two renames: `applyLevel(x)` → `setLevel(x)` and
+> `readCurrentVoltage()` → `readCurrentMa()`. The constructor's last argument
+> now genuinely sets the duty cap (it was ignored in 1.x). Everything else is
+> source-compatible.
 
 ---
 
@@ -189,11 +194,14 @@ If you are using a different board and wish to adapt the library, you may need t
 
 ## 🧪 API Reference
 
+All defaults live in `namespace MistMakerDefaults` (top of `MistMaker.h`) —
+one documented place for every tuning value the library assumes.
+
 ```cpp
 // --- construction ---
-MistMaker(const MistMakerPins &pins, int pwmFreq = 108700,
-          int pwmRes = 8, int duty = 127);
-MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // v1.0
+MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
+          uint8_t pwmRes = 8, uint8_t dutyMax = 127);
+MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // bare pins
 
 // --- control ---
 void begin();
