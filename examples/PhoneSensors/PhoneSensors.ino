@@ -25,12 +25,14 @@
 //   2. Fill in WIFI_SSID / WIFI_PASS / RELAY_HOST below.
 //   3. Flash. Open the app URL on your phone. Your maker appears in the list.
 //
-// Library: MistMaker >= 1.1.0  +  "WebSockets" by Markus Sattler (Library Mgr)
-// Board:   Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
+// Libraries (Library Manager): MistMaker >= 2.0.0,
+//   "WebSockets" by Markus Sattler, "ArduinoJson" by Benoit Blanchon (v7)
+// Board: Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
 
 #include <MistMaker.h>
 #include <WiFi.h>
 #include <WebSocketsClient.h>
+#include <ArduinoJson.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
 MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
@@ -72,34 +74,38 @@ void applyMistPercent(int pct) {
   Serial.printf("[CMD] mist level -> %u%%\n", level);   // serial-debug each change
 }
 
-void sendStatus() {
+// All status fields are numbers or fixed strings, so snprintf is safe here;
+// parsing (below) uses a real JSON parser because the input is not ours.
+void sendStatus(float currentMa) {
   char buf[160];
   snprintf(buf, sizeof(buf),
     "{\"t\":\"status\",\"level\":%u,\"current_ma\":%.0f,\"water\":\"%s\",\"rssi\":%d}",
-    level, mist.readCurrentMa(20), waterName(mist.senseState()), WiFi.RSSI());
+    level, currentMa, waterName(mist.senseState()), WiFi.RSSI());
   ws.sendTXT(buf);
 }
 
 // Commands from the phone:
 //   {"t":"set","target":"all"|"<id>","level":NN}   one or all makers
 //   {"t":"multi","levels":{"<id>":NN,...}}         a different level per maker
-void onCommand(const char* msg) {
-  if (strstr(msg, "\"t\":\"set\"")) {
-    const char* tgt = strstr(msg, "\"target\":\"");
-    bool forMe = !tgt;                                  // no target = everyone
-    if (tgt) {
-      tgt += 10;                                        // step over: "target":"
-      const size_t n = strlen(deviceId);
-      forMe = !strncmp(tgt, "all\"", 4) ||
-              (!strncmp(tgt, deviceId, n) && tgt[n] == '"');  // exact id, not a prefix
+void onCommand(const char* msg, size_t len) {
+  JsonDocument doc;                                    // ArduinoJson v7: elastic
+  if (deserializeJson(doc, msg, len)) return;          // not JSON — ignore
+  const char* t = doc["t"];
+  if (!t) return;
+
+  if (!strcmp(t, "set")) {
+    const char* tgt = doc["target"];                   // missing target = everyone
+    const bool forMe = !tgt || !strcmp(tgt, "all") || !strcmp(tgt, deviceId);
+    if (forMe && doc["level"].is<int>()) {
+      lastCmd = millis();
+      applyMistPercent(doc["level"].as<int>());
     }
-    const char* lv = strstr(msg, "\"level\":");
-    if (forMe && lv) { lastCmd = millis(); applyMistPercent(atoi(lv + 8)); }
-  } else if (strstr(msg, "\"t\":\"multi\"")) {
-    char key[10];
-    snprintf(key, sizeof(key), "\"%s\":", deviceId);    // find "A4F1":NN
-    const char* p = strstr(msg, key);
-    if (p) { lastCmd = millis(); applyMistPercent(atoi(p + strlen(key))); }
+  } else if (!strcmp(t, "multi")) {
+    JsonVariant mine = doc["levels"][deviceId];
+    if (!mine.isNull()) {
+      lastCmd = millis();
+      applyMistPercent(mine.as<int>());
+    }
   }
 }
 
@@ -116,7 +122,7 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
       Serial.println("[WS] error");
       break;
     case WStype_TEXT:
-      onCommand((const char*)payload);
+      onCommand((const char*)payload, len);
       break;
     default: break;
   }
@@ -185,12 +191,13 @@ void loop() {
   }
 
   // Once a second: report status to the app AND print a Serial heartbeat.
+  // One shared reading — readCurrentMa blocks for its sample window.
   if (millis() - lastTick > 1000) {
     lastTick = millis();
     const float ma = mist.readCurrentMa(20);
     Serial.printf("[STAT] level=%u%%  current=%.0f mA  water=%s  wifi=%s(%d dBm)\n",
                   level, ma, waterName(mist.senseState()),
                   ws.isConnected() ? "relay-ok" : "no-relay", WiFi.RSSI());
-    if (ws.isConnected()) sendStatus();
+    if (ws.isConnected()) sendStatus(ma);
   }
 }
