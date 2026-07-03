@@ -309,7 +309,11 @@ const Audio = {
     this.prevBass = bass;
     this.fluxAvg += (flux - this.fluxAvg) * 0.05;
     this.fluxDev += (Math.abs(flux - this.fluxAvg) - this.fluxDev) * 0.05;
-    if (flux > this.fluxAvg + 2 * this.fluxDev && this.beat < 0.3) this.beat = 1;
+    // absolute floor: bass must carry real signal (~24/255 mean per bin), or
+    // post-silence mic noise fires phantom beats
+    const bassBins = Math.max(3, e[Math.min(2, N)] - e[0]);
+    const bassFloor = bassBins * 24;
+    if (bass > bassFloor && flux > this.fluxAvg + 2 * this.fluxDev && this.beat < 0.3) this.beat = 1;
     this.beat *= 0.90;                                  // ~150 ms decay at 60 fps
 
     for (let i = 0; i < N; i++) {
@@ -324,7 +328,7 @@ const Audio = {
       out[i] = clamp((this.env[i] * 100 + this.beat * 20) * G());
     }
     bands = out;
-    energy = clamp(out.reduce((p, c) => p + c, 0) / N + this.beat * 30);
+    energy = clamp(out.reduce((p, c) => p + c, 0) / N + this.beat * 30 * Math.min(1, G()));
     drawBands(this.ctx2d, out, this.beat);
   },
   stop() { teardown(this.a); this.a = null; bands = null; bandsCv.hidden = true;

@@ -88,21 +88,26 @@ void sendStatus(float currentMa) {
 //   {"t":"set","target":"all"|"<id>","level":NN}   one or all makers
 //   {"t":"multi","levels":{"<id>":NN,...}}         a different level per maker
 void onCommand(const char* msg, size_t len) {
+  if (len > 384) return;                               // valid commands are tiny
   JsonDocument doc;                                    // ArduinoJson v7: elastic
   if (deserializeJson(doc, msg, len)) return;          // not JSON — ignore
   const char* t = doc["t"];
   if (!t) return;
 
   if (!strcmp(t, "set")) {
-    const char* tgt = doc["target"];                   // missing target = everyone
+    // target must be absent (= everyone) or a string naming us/"all";
+    // a malformed non-string target must NOT read as "everyone".
+    JsonVariant tv = doc["target"];
+    if (!tv.isNull() && !tv.is<const char*>()) return;
+    const char* tgt = tv.as<const char*>();
     const bool forMe = !tgt || !strcmp(tgt, "all") || !strcmp(tgt, deviceId);
     if (forMe && doc["level"].is<int>()) {
       lastCmd = millis();
-      applyMistPercent(doc["level"].as<int>());
+      applyMistPercent(doc["level"].as<int>());        // constrained 0..100 inside
     }
   } else if (!strcmp(t, "multi")) {
     JsonVariant mine = doc["levels"][deviceId];
-    if (!mine.isNull()) {
+    if (mine.is<int>()) {
       lastCmd = millis();
       applyMistPercent(mine.as<int>());
     }
