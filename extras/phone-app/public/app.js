@@ -89,11 +89,14 @@ function dispatch() {
     if (force || isNew(key, lvl)) { wsSend({ t: "set", target: tgt, level: lvl }); seen.set(key, lvl); lastSendAt = now; }
   } else {
     const levels = {};
+    // Sort by id so band/wave position is deterministic — a maker keeps its
+    // frequency band across reconnects instead of following roster order.
+    const orderly = [...makers].sort((a, b) => (a.id < b.id ? -1 : 1));
     if (route === "spectrum") {   // bands present here (the null case fell into sync above)
-      makers.forEach((d, i) => levels[d.id] = Math.round(bands[i % bands.length] || 0));
+      orderly.forEach((d, i) => levels[d.id] = Math.round(bands[i % bands.length] || 0));
     } else { // phase: a traveling wave scaled by the input energy
       const sp = (spread.value / 100) * Math.PI;
-      makers.forEach((d, i) => levels[d.id] = Math.round(energy * (0.5 + 0.5 * Math.sin(waveT - i * sp))));
+      orderly.forEach((d, i) => levels[d.id] = Math.round(energy * (0.5 + 0.5 * Math.sin(waveT - i * sp))));
     }
     let any = force;
     for (const id in levels) if (isNew("m:" + id, levels[id])) any = true;
@@ -258,28 +261,75 @@ const Face = {
   stop() { teardown({ stream: this.stream }); this.fl?.close?.(); this.fl = null; this.picker?.remove(); this.picker = null; },
 };
 
+/* Music mode. Four ideas beyond "volume = mist":
+   1. LOG-SPACED bands (60 Hz–8 kHz): musical octaves, so bass gets real
+      resolution instead of one linear slice. FFT 2048 → ~21.5 Hz bins.
+   2. Per-band AUTO-GAIN: each band normalizes against its own rolling peak,
+      so a quiet hi-hat band dances as much as a loud kick band.
+   3. ATTACK/RELEASE envelope: rises fast on a hit, falls slowly — the 8 Hz
+      send layer samples a smooth curve instead of FFT jitter.
+   4. BEAT PUNCH: spectral flux on the bass bands; when a kick lands, energy
+      (and every band a little) gets a decaying boost, so even the single-
+      maker "sync" route visibly pulses with the music. */
 const Audio = {
-  name: "audio", hint: "Play music near the phone — each maker becomes one frequency band.",
+  name: "audio", hint: "Play music near the phone — makers pulse with the beat, one frequency band each.",
   async start() {
-    this.a = await micAnalyser(256); this.buf = new Uint8Array(this.a.an.frequencyBinCount);
+    this.a = await micAnalyser(2048);
+    this.a.an.smoothingTimeConstant = 0.5;   // snappier than the 0.8 default; we do our own envelope
+    this.buf = new Uint8Array(this.a.an.frequencyBinCount);
+    this.env = []; this.ref = [];            // per-band envelope + rolling peak (auto-gain)
+    this.prevBass = 0; this.beat = 0; this.fluxAvg = 0; this.fluxDev = 1;
     bandsCv.hidden = false; this.ctx2d = bandsCv.getContext("2d");
     bandsCv.width = (bandsCv.clientWidth || 320) * devicePixelRatio; bandsCv.height = 70 * devicePixelRatio;
     if (makers.length >= 2) { this.prevRoute = route; setRoute("spectrum"); }
+  },
+  // Log-spaced band edges (FFT bin indexes) for N bands over 60 Hz..8 kHz.
+  edges(N) {
+    const sr = this.a.an.context.sampleRate;
+    if (this._e?.length === N + 1 && this._sr === sr) return this._e;
+    const hzPerBin = sr / this.a.an.fftSize, hi = Math.min(8000, sr / 2);
+    this._e = Array.from({ length: N + 1 },
+      (_, i) => Math.max(1, Math.round(60 * Math.pow(hi / 60, i / N) / hzPerBin)));
+    for (let i = 1; i <= N; i++)                        // ≥1 bin per band
+      if (this._e[i] <= this._e[i - 1]) this._e[i] = this._e[i - 1] + 1;
+    this._sr = sr;
+    return this._e;
   },
   read() {
     if (!this.a) return;
     this.a.an.getByteFrequencyData(this.buf);
     const N = Math.max(1, Math.min(makers.length || 8, 16));
-    const out = new Array(N).fill(0);
-    const lo = 2, hi = this.buf.length;                  // skip DC bin
+    const e = this.edges(N), out = new Array(N);
+
+    // Beat: spectral flux (energy rising frame-over-frame) in the bass bins,
+    // fired when it clears its own rolling mean + 2 sigma. Self-calibrating.
+    let bass = 0;
+    for (let j = e[0]; j < Math.max(e[0] + 3, e[Math.min(2, N)]); j++) bass += this.buf[j];
+    const flux = Math.max(0, bass - this.prevBass);
+    this.prevBass = bass;
+    this.fluxAvg += (flux - this.fluxAvg) * 0.05;
+    this.fluxDev += (Math.abs(flux - this.fluxAvg) - this.fluxDev) * 0.05;
+    // absolute floor: bass must carry real signal (~24/255 mean per bin), or
+    // post-silence mic noise fires phantom beats
+    const bassBins = Math.max(3, e[Math.min(2, N)] - e[0]);
+    const bassFloor = bassBins * 24;
+    if (bass > bassFloor && flux > this.fluxAvg + 2 * this.fluxDev && this.beat < 0.3) this.beat = 1;
+    this.beat *= 0.90;                                  // ~150 ms decay at 60 fps
+
     for (let i = 0; i < N; i++) {
-      const a = lo + Math.floor((hi - lo) * i / N), b = lo + Math.floor((hi - lo) * (i + 1) / N);
-      let s = 0; for (let j = a; j < b; j++) s += this.buf[j];
-      out[i] = clamp((s / Math.max(1, b - a)) / 255 * 140 * G());
+      let s = 0; for (let j = e[i]; j < e[i + 1]; j++) s += this.buf[j];
+      const raw = (s / (e[i + 1] - e[i])) / 255;        // 0..1
+      // auto-gain: normalize to this band's own slowly-decaying peak
+      this.ref[i] = Math.max(raw, (this.ref[i] || 0.25) * 0.998, 0.25);
+      const norm = Math.min(1, raw / this.ref[i]);
+      // envelope: fast attack, slow release
+      const prev = this.env[i] || 0;
+      this.env[i] = prev + (norm - prev) * (norm > prev ? 0.5 : 0.12);
+      out[i] = clamp((this.env[i] * 100 + this.beat * 20) * G());
     }
     bands = out;
-    energy = out.reduce((p, c) => p + c, 0) / N;
-    drawBands(this.ctx2d, out);
+    energy = clamp(out.reduce((p, c) => p + c, 0) / N + this.beat * 30 * Math.min(1, G()));
+    drawBands(this.ctx2d, out, this.beat);
   },
   stop() { teardown(this.a); this.a = null; bands = null; bandsCv.hidden = true;
            if (this.prevRoute) { setRoute(this.prevRoute); this.prevRoute = null; } },
@@ -290,9 +340,13 @@ const SOURCES = { mic: Mic, light: Light, motion: Motion, face: Face, audio: Aud
 function teardown(a) { try { a?.stream?.getTracks().forEach(t => t.stop()); a?.ctx?.close?.(); } catch {} }
 function clamp(v) { return v < 0 ? 0 : v > 100 ? 100 : v; }
 
-function drawBands(cx, arr) {
+function drawBands(cx, arr, beat = 0) {
   const W = bandsCv.width, H = bandsCv.height, n = arr.length, bw = W / n;
   cx.clearRect(0, 0, W, H);
+  if (beat > 0.05) {                       // beat flash behind the bars
+    cx.fillStyle = `rgba(255, 200, 49, ${(beat * 0.25).toFixed(3)})`;
+    cx.fillRect(0, 0, W, H);
+  }
   arr.forEach((v, i) => {
     const h = (v / 100) * H;
     cx.fillStyle = i % 2 ? "#2596be" : "#ffc831";

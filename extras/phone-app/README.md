@@ -134,7 +134,12 @@ Open your Worker URL on a phone, then:
   - **Tilt** 📱 — lean the phone left/right.
   - **Face** 😮 — open your mouth (or switch to brows / blink).
   - **Music** 🎵 — play a song; the makers become a **spectrum** — one frequency
-    band each. Line them up for a vapor equalizer.
+    band each (log-spaced 60 Hz–8 kHz, so bass gets real resolution). Bands
+    auto-gain against their own rolling peaks, ride a fast-attack/slow-release
+    envelope, and a bass beat detector adds a decaying "punch" on each kick — the
+    mist pulses with the rhythm instead of tracking raw loudness. Band order
+    follows device id, so each maker keeps its band across reconnects. Line them
+    up for a vapor equalizer.
 - **Your makers** — with 2+ makers you get routing:
   - **Together** — all in sync.
   - **Wave** — a ripple/delay across them (use *spread*) — an animation.
