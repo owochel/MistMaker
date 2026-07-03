@@ -26,7 +26,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 >   `mA ≈ oldVolts × 166.7` (e.g. an old `> 0.4` check becomes `> 67` mA).
 > - The constructor's last argument (duty cap) now **takes effect** — 1.x
 >   accepted and ignored it. Valid caps are `1..(2^pwmRes − 1)`; anything
->   else (including omitting it) resolves to the 50% sweet spot, which is
+>   else (including omitting it) resolves to the 50% efficiency knee, which is
 >   exactly the 1.x behavior. If an old sketch passed a valid value like
 >   `255` "for full power", it will now really drive that duty — remove the
 >   argument to keep the 1.x drive level.
@@ -209,7 +209,7 @@ probe/calibration timing constants sit at the top of `MistMaker.cpp`.
 ```cpp
 // --- construction ---
 MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
-          uint8_t pwmRes = 8, int dutyMax = DUTY_AUTO); // AUTO = 50% sweet spot
+          uint8_t pwmRes = 8, int dutyMax = DUTY_AUTO); // AUTO = 50% efficiency knee
 MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // bare pins
 
 // --- control ---
@@ -217,7 +217,7 @@ void begin();
 void turnOn();  void turnOff();  void toggle();  bool isOn();
 void setLevel(uint8_t level);    // 0..255 dimming
 uint8_t getLevel();
-void setMaxDuty(uint8_t duty);   // default 127 (50% = resonant sweet spot)
+void setMaxDuty(int duty);       // default 127; past 50% = 5x power, hot L1
 void printStatus();
 
 // --- current sense / detection ---
