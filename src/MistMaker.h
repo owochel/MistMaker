@@ -15,10 +15,10 @@
 //   * hardware tuning values are named constants in MistMakerDefaults (below);
 //     probe/calibration timing lives at the top of MistMaker.cpp
 //   * the constructor's duty-cap parameter now actually takes effect (it was
-//     silently ignored in 1.x). Valid caps are 1..(2^pwmRes - 1); anything
-//     else — including the default DUTY_AUTO — resolves to 50% of full scale
-//     (= 127 at 8-bit, the 1.x behavior), so legacy garbage values can't
-//     wrap into a wrong drive level.
+//     silently ignored in 1.x). Valid caps are 1..90% of full scale; higher
+//     requests clamp to 90% (above it the drive makes heat, not mist —
+//     bench-measured); zero/negative/DUTY_AUTO resolve to 50% of full scale
+//     (= 127 at 8-bit, the 1.x behavior).
 //   * removed: applyLevel() alias -> use setLevel();
 //              readCurrentVoltage() -> use readCurrentMa() (NOTE: different
 //              unit — see README migration note)
@@ -110,11 +110,13 @@ inline MistMakerPins MistMakerExtensionV01() {
   return MistMakerPins{ D0, -1, D2, -1, -1, -1, -1 };
 }
 
-// Mist Maker Battery Kit V0.3 — LiPo + USB-C, battery divider on D1.
-// No mux-status pin: on V0.3 the TPS2116 ST line isn't routed to the XIAO,
-// so battery reads can't tell USB from the cell — call disableBattery().
+// Mist Maker Battery Kit V0.3 — LiPo + USB-C. Battery sensing is OFF in this
+// preset: V0.3 has no mux-status pin, so the D1 divider can't tell USB from
+// the cell and blind reads caused false low-battery shutdowns. To experiment
+// anyway: pins.battery = D1 after construction (readings valid only with USB
+// physically unplugged).
 inline MistMakerPins MistMakerBatteryKitV03() {
-  return MistMakerPins{ D0, D3, D2, D7, D6, D1, -1 };
+  return MistMakerPins{ D0, D3, D2, D7, D6, -1, -1 };
 }
 
 // Mist Maker Battery Kit V0.4 — V0.3 plus the TPS2116 ST (power-mux status)
@@ -183,8 +185,12 @@ public:
   // level 0..255 maps linearly onto 0..dutyMax. 0 = off.
   void setLevel(uint8_t level);
   uint8_t getLevel() const { return _level; }
-  // Same validity policy as the constructor: out-of-range -> 50% auto.
-  void setMaxDuty(int dutyMax) { _dutyMax = resolveDutyCap(dutyMax); }
+  // Same validity policy as the constructor (1..90% of full scale; higher
+  // clamps to 90%; <=0 -> 50% auto). Takes effect immediately, even mid-mist.
+  void setMaxDuty(int dutyMax) {
+    _dutyMax = resolveDutyCap(dutyMax);
+    if (_state && _level > 0) setLevel(_level);   // re-apply at the new cap
+  }
 
   // ------------------- current sensing -------------------
   // Sense-amp transfer factor in V per A (gain x shunt). Change if your
@@ -208,6 +214,9 @@ public:
   // Probe = briefly drive the disc at a probe duty, measure current,
   // classify, then restore whatever the mist was doing before. Blocking
   // for a few hundred ms — schedule probes in an OFF window, not per-loop.
+  // Probe duties are fixed (PROBE_DUTY/WATER_PROBE_DUTY) and deliberately
+  // independent of setMaxDuty(): the classifier thresholds are calibrated
+  // at these exact duties.
   MistSenseState probe();                 // full classify (disc + water)
   bool discPresent();                     // quick low-duty presence check
   MistSenseState senseState() const { return _senseState; }

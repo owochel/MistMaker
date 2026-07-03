@@ -13,7 +13,7 @@
 // tell USB from the cell, so low-battery deep-sleep is safe again —
 // batteryState() reports CHARGING on USB and only CRITICAL on a dying cell, so
 // the board never sleeps while it's plugged in for reflashing. On V0.3 (no ST
-// pin) switch the preset below and uncomment mist.disableBattery() in setup().
+// pin) switch the preset below — its preset ships with battery sensing off.
 //
 // Board: Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
 // Library: MistMaker >= 2.0.0
@@ -25,7 +25,7 @@
 
 // ---- Select your board (uncomment exactly ONE) ----
 MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board: use this + uncomment disableBattery() (D8 floats on V0.3)
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());
@@ -134,7 +134,6 @@ void setup() {
   delay(1000);
   // On Battery Kit V0.3 (no ST pin) uncomment this so the unreliable D1 reading
   // can't trigger a false low-battery shutdown:
-  // mist.disableBattery();
   mist.begin();
 
   WiFi.mode(WIFI_AP);

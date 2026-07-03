@@ -38,7 +38,7 @@ MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
                      uint32_t pwmFreq, uint8_t pwmRes, int dutyMax)
   : _mistPin(mistPin), _enPin(enPin), _sensePin(sensePin), _ledPin(ledPin),
     _buttonPin(-1), _battPin(-1), _usbSensePin(-1),
-    _pwmFreq(pwmFreq), _pwmRes(pwmRes == 0 ? 1 : pwmRes),
+    _pwmFreq(pwmFreq), _pwmRes(pwmRes < 1 ? 1 : (pwmRes > 16 ? 16 : pwmRes)),
     // _pwmRes is initialized above (declaration order), so this is safe:
     _dutyMax(resolveDutyCap(dutyMax)), _level(0), _state(false), _startTime(0),
     _senseFactor(MistMakerDefaults::SENSE_VOLTS_PER_AMP),
@@ -63,10 +63,15 @@ MistMaker::MistMaker(const MistMakerPins &p,
 
 uint16_t MistMaker::resolveDutyCap(int requested) const {
   const uint16_t fullScale = (uint16_t)((1u << _pwmRes) - 1u);
-  if (requested >= 1 && requested <= (int)fullScale) return (uint16_t)requested;
-  // DUTY_AUTO, 0, negatives, or beyond full scale (incl. values 1.x ignored):
-  // 50% of full scale — the efficiency/stability knee (127 at 8-bit).
-  return (uint16_t)(fullScale / 2);
+  // ~90% of full scale is the physical ceiling: above it the resonant
+  // ring-back has no time to swing, so the drive makes heat, not mist
+  // (bench sweep, 2026-07-03). Requests beyond it clamp to the ceiling.
+  const uint16_t ceiling = (uint16_t)(((uint32_t)fullScale * 9u) / 10u);
+  if (requested >= 1 && requested <= (int)ceiling) return (uint16_t)requested;
+  if (requested > (int)ceiling) return ceiling;
+  // DUTY_AUTO, 0, or negatives: 50% of full scale — the efficiency knee.
+  const uint16_t half = (uint16_t)(fullScale / 2);
+  return half < 1 ? 1 : half;
 }
 
 // ---------------------------------------------------------------------------
