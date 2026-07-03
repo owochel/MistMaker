@@ -12,10 +12,25 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - **Mist dimming** — `setLevel(0..255)`, dim mist like an LED
 - **Current sensing in mA** with auto or manual calibration
 - **Piezo disc + water detection** — one ADC pin tells you if a disc is attached, if it fell off, and if the water ran out
-- **Battery monitoring** — voltage, percent estimate, and a graceful low-battery shutdown to prevent brown-outs
+- **Battery monitoring** — calibrated voltage, percent estimate, and a graceful low-battery shutdown to prevent brown-outs
+- **Power-source sensing** — reads the TPS2116 mux status (Battery Kit V0.4) so battery logic knows USB from the cell and never false-triggers
 - **Pin presets for every official board variant** — one line to target your PCB
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
-- Modular and reusable class-based structure; v1.0 sketches compile unchanged
+- Modular and reusable class-based structure
+
+> **Upgrading to v2.0?**
+> - `applyLevel(x)` → `setLevel(x)` (true rename, same 0..255 meaning).
+> - `readCurrentVoltage()` is **removed, not renamed** — it returned the raw
+>   sense-pin voltage with a legacy ×2 scale; `readCurrentMa()` returns
+>   milliamps via the 3.0 V/A sense factor. Convert old thresholds with
+>   `mA ≈ oldVolts × 166.7` (e.g. an old `> 0.4` check becomes `> 67` mA).
+> - The constructor's last argument (duty cap) now **takes effect** — 1.x
+>   accepted and ignored it. Valid caps are `1..90% of full scale` (higher
+>   requests clamp to 90% — above it the drive makes heat, not mist);
+>   zero/negative/omitted resolve to the 50% efficiency knee, which is exactly
+>   the 1.x behavior. If an old sketch passed a valid value like `200`, it
+>   will now really drive that duty — remove the argument to keep 1.x drive.
+> - Everything else is source-compatible.
 
 ---
 
@@ -34,7 +49,8 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 #include <MistMaker.h>
 
 // One line per board — pick yours:
-MistMaker mist(MistMakerBatteryKitV03());
+MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off — no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());
@@ -93,27 +109,56 @@ mist.setCurrentSenseFactor(3.0);  // INA180A3 (100 V/V) × 30 mΩ
 
 ---
 
+## 🌫️ How much mist can it make? (duty cap, measured)
+
+The PWM duty cap is the library's "how hard to drive" ceiling, and it was
+bench-characterized on real V0.4 hardware (2026-07-03 duty sweep, 0→90%):
+
+| Duty cap | What you get |
+|---|---|
+| **127 (50%) — the default** | The efficiency sweet spot: ~90% of practical mist at ~¼ of peak power, cool components, battery-sustainable (~0.3 A from the cell). Ships as `DUTY_AUTO`. |
+| **`MistMakerDefaults::DUTY_TURBO` (178 ≈ 70%)** | The **true mist maximum** — output rises all the way to ~70% duty on this drive. Costs ~4× the input power, needs a strong 5 V supply (≥ 2 A wall adapter); a battery reaches it only seconds at full charge. |
+| Above ~75% | Measurably *worse*: mist declines and turns unstable while current climbs toward 2 A — the resonant fly-back gets clipped and the energy becomes heat. The library hard-limits at 90% of full scale. |
+
+```cpp
+mist.setMaxDuty(MistMakerDefaults::DUTY_TURBO);  // wall-powered "turbo"
+mist.setMaxDuty(MistMakerDefaults::DUTY_AUTO);   // back to the 50% default
+```
+
+Setting a cap doesn't change your sketch's `setLevel(0..255)` scale — 255
+always means "my current maximum."
+
+---
+
 ## 🔋 Battery Monitoring (Battery Kit)
 
 ```cpp
-float v   = mist.readBatteryVolts();   // via on-board divider
+float v   = mist.readBatteryVolts();   // calibrated volts via the on-board divider
 uint8_t p = mist.batteryPercent();     // rough LiPo gauge for UIs
 
-if (mist.batteryCritical()) {          // hysteresis built in
+if (mist.batteryCritical()) {          // hysteresis built in; false on USB
   mist.shutdown();                     // mist off + boost rail off
   esp_deep_sleep_start();              // sleep instead of brown-out
 }
 ```
 
 Defaults: divider ratio 2.0, low = 3.45 V, critical = 3.20 V. Override with
-`setBatteryDivider()` / `setBatteryThresholds()`.
+`setBatteryDivider()` / `setBatteryThresholds()`. Reads use the ESP32's
+calibrated `analogReadMilliVolts()` (linear even on the C6).
 
-> ⚠️ **Battery Kit V0.3:** the D1 divider reads `BATT+`, but the TPS2116 power
-> mux means the board runs off USB-C whenever it's plugged in — so D1 can't tell
-> "USB-only, no cell" from "on battery, dying," which caused false low-battery
-> shutdowns. Until V0.4 adds a USB-present pin, call `mist.disableBattery();`
-> before `begin()` to switch battery sensing off (every `battery*` call then
-> behaves as on a board with no cell). The networked examples already do this.
+> **Why the board can't just read `BATT+`:** the TPS2116 power mux runs the
+> board off USB-C whenever it's plugged in, so `BATT+` tracks the *charger* (not
+> state-of-charge) on USB — reading it blindly caused false low-battery
+> shutdowns.
+>
+> - **Battery Kit V0.4** routes the mux **ST** (status) pin to **D8**, so the
+>   `MistMakerBatteryKitV04()` preset self-gates: `batteryState()` returns
+>   `MIST_BATT_CHARGING` on USB and only ever reports `LOW`/`CRITICAL` on the
+>   cell. Use `usbPresent()` / `onBattery()` to read the source yourself.
+> - **Battery Kit V0.3** has no ST pin, so its preset ships with battery
+>   sensing **off** (every `battery*` call behaves as on a board with no
+>   cell). `disableBattery()` remains for switching it off at runtime on
+>   custom builds.
 
 ---
 
@@ -180,18 +225,22 @@ If you are using a different board and wish to adapt the library, you may need t
 
 ## 🧪 API Reference
 
+Hardware defaults live in `namespace MistMakerDefaults` (top of `MistMaker.h`);
+probe/calibration timing constants sit at the top of `MistMaker.cpp`.
+
 ```cpp
 // --- construction ---
-MistMaker(const MistMakerPins &pins, int pwmFreq = 108700,
-          int pwmRes = 8, int duty = 127);
-MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // v1.0
+MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
+          uint8_t pwmRes = 8,
+          int dutyMax = MistMakerDefaults::DUTY_AUTO); // AUTO = 50% efficiency knee
+MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // bare pins
 
 // --- control ---
 void begin();
 void turnOn();  void turnOff();  void toggle();  bool isOn();
 void setLevel(uint8_t level);    // 0..255 dimming
 uint8_t getLevel();
-void setMaxDuty(uint8_t duty);   // default 127 (50% = resonant sweet spot)
+void setMaxDuty(int duty);       // default 127 (50%); DUTY_TURBO=178 = measured peak
 void printStatus();
 
 // --- current sense / detection ---
@@ -204,13 +253,19 @@ bool  discPresent();
 MistSenseState senseState();
 float lastProbeMa();
 
+// --- power source (mux status, V0.4+) ---
+void    setUsbSensePin(int8_t pin);                // TPS2116 ST (Battery Kit V0.4 = D8)
+bool    usbPresent();            // load on USB (mux VIN1)? true if no sense pin
+bool    onBattery();             // load on the cell (mux VIN2)? = valid SoC
+
 // --- battery ---
-float   readBatteryVolts(uint8_t samples = 16);
+float   readBatteryVolts(uint8_t samples = 16);    // calibrated volts
 uint8_t batteryPercent();
-MistBatteryState batteryState(); // OK / LOW / CRITICAL, with hysteresis
+MistBatteryState batteryState(); // OK/LOW/CRITICAL/CHARGING, ST-gated + hysteresis
 bool    batteryLow();   bool batteryCritical();
 void    setBatteryDivider(float ratio);            // default 2.0
 void    setBatteryThresholds(float lowV, float critV);
+void    disableBattery();        // pre-V0.4 escape hatch (turns sensing off)
 void    shutdown();              // mist + boost + LED off (call before sleep)
 ```
 

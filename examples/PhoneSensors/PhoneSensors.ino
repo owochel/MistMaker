@@ -25,7 +25,7 @@
 //   2. Fill in WIFI_SSID / WIFI_PASS / RELAY_HOST below.
 //   3. Flash. Open the app URL on your phone. Your maker appears in the list.
 //
-// Library: MistMaker >= 1.1.0  +  "WebSockets" by Markus Sattler (Library Mgr)
+// Library: MistMaker >= 2.0.0  +  "WebSockets" by Markus Sattler (Library Mgr)
 // Board:   Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
 
 #include <MistMaker.h>
@@ -33,7 +33,8 @@
 #include <WebSocketsClient.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV03());
+MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 
@@ -63,7 +64,7 @@ const char* waterName(MistSenseState s) {
 
 // level is a 0-100 percentage; the library caps real PWM duty at 50% internally,
 // so 100 here is full mist, not 100% duty.
-void applyLevel(int pct) {
+void applyMistPercent(int pct) {
   pct = constrain(pct, 0, 100);
   if (pct == level) return;                // ignore no-op commands
   level = pct;
@@ -93,12 +94,12 @@ void onCommand(const char* msg) {
               (!strncmp(tgt, deviceId, n) && tgt[n] == '"');  // exact id, not a prefix
     }
     const char* lv = strstr(msg, "\"level\":");
-    if (forMe && lv) { lastCmd = millis(); applyLevel(atoi(lv + 8)); }
+    if (forMe && lv) { lastCmd = millis(); applyMistPercent(atoi(lv + 8)); }
   } else if (strstr(msg, "\"t\":\"multi\"")) {
     char key[10];
     snprintf(key, sizeof(key), "\"%s\":", deviceId);    // find "A4F1":NN
     const char* p = strstr(msg, key);
-    if (p) { lastCmd = millis(); applyLevel(atoi(p + strlen(key))); }
+    if (p) { lastCmd = millis(); applyMistPercent(atoi(p + strlen(key))); }
   }
 }
 
@@ -109,7 +110,7 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
       break;
     case WStype_DISCONNECTED:
       Serial.println("[WS] disconnected — mist off, will retry every 3 s");
-      applyLevel(0);                                   // fail-safe: never atomize on a dead link
+      applyMistPercent(0);                                   // fail-safe: never atomize on a dead link
       break;
     case WStype_ERROR:
       Serial.println("[WS] error");
@@ -124,7 +125,7 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
 void setup() {
   Serial.begin(115200);
   delay(500);
-  mist.disableBattery();   // V0.3 D1 can't tell USB from battery — re-add at V0.4
+  // (Battery Kit V0.3? Its preset ships with battery sensing off - no ST pin.)
   mist.begin();
 
   uint8_t mac[6];
@@ -170,7 +171,7 @@ void loop() {
   // cut the mist rather than atomize forever.
   if (level > 0 && millis() - lastCmd > CMD_TIMEOUT) {
     Serial.println("[WATCHDOG] no commands — mist off");
-    applyLevel(0);
+    applyMistPercent(0);
   }
 
   // Re-probe water/disc every 30 s so the app's status stays live, and never
@@ -178,7 +179,7 @@ void loop() {
   if (millis() - lastProbe > 30000) {
     lastProbe = millis();
     MistSenseState s = mist.probe();
-    if (s == MIST_DISC_MISSING || s == MIST_DISC_DISCONNECTED) applyLevel(0);
+    if (s == MIST_DISC_MISSING || s == MIST_DISC_DISCONNECTED) applyMistPercent(0);
   }
 
   // Once a second: report status to the app AND print a Serial heartbeat.

@@ -6,15 +6,16 @@
 //     us an on/off toggle + brightness slider for free)
 //   * a water/disc status sensor (from current sensing)
 //
-// NOTE: battery sensing is intentionally OFF on this branch — Battery Kit V0.3
-// can't tell USB-C power from a real cell on D1, so the reading is unreliable.
-// TODO(V0.4): re-add the battery % sensor + low-battery deep-sleep once the
-// board has a real USB-present sense pin.
+// Battery: Battery Kit V0.4 routes the TPS2116 mux STATUS pin to D8, so the
+// library can tell USB from the cell. This example publishes a battery %
+// sensor and deep-sleeps on a critically low cell — batteryState() reads
+// CHARGING on USB, so it never sleeps while plugged in. On V0.3 (no ST pin)
+// switch the preset below — its preset ships with battery sensing off.
 //
 // Requirements:
 //   * MQTT broker (the standard Mosquitto add-on) + MQTT integration in HA
 //   * Arduino library: PubSubClient (Library Manager)
-//   * MistMaker >= 1.1.0
+//   * MistMaker >= 2.0.0
 //
 // Prefer YAML/no-code? See the ESPHome config in the main repo:
 // Programmable-Mist-Maker/firmware-examples/home-assistant/esphome-mistmaker.yaml
@@ -24,9 +25,11 @@
 #include <MistMaker.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <esp_sleep.h>          // deep sleep on a critically low cell
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV03());
+MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 
@@ -46,6 +49,8 @@ PubSubClient mqtt(wifi);
 
 char topicCmd[64], topicState[64], topicAvail[64], topicSensors[64];
 unsigned long lastSensorPub = 0;
+unsigned long lastBattMs = 0;
+unsigned long lastMqttTry = 0;
 
 const char* waterName(MistSenseState s) {
   switch (s) {
@@ -65,8 +70,14 @@ void publishState() {
 }
 
 void publishSensors() {
-  char buf[96];
-  snprintf(buf, sizeof(buf), "{\"water\":\"%s\"}", waterName(mist.senseState()));
+  char buf[128];
+  // battery% is voltage-derived; on USB it tracks the charger, not true SoC —
+  // the "charging" flag lets HA automations ignore the number while plugged in.
+  const bool charging = (mist.batteryState() == MIST_BATT_CHARGING);
+  snprintf(buf, sizeof(buf),
+           "{\"water\":\"%s\",\"battery\":%u,\"charging\":%s}",
+           waterName(mist.senseState()), mist.batteryPercent(),
+           charging ? "true" : "false");
   mqtt.publish(topicSensors, buf, true);
 }
 
@@ -96,6 +107,17 @@ void publishDiscovery() {
     "\"val_tpl\":\"{{ value_json.water }}\",%s}",
     DEV_ID, topicSensors, topicAvail, devBuf);
   mqtt.publish(topic, payload, true);
+
+  // Battery % sensor (Battery Kit V0.4 with a cell). device_class battery gives
+  // HA the battery icon; the value rides on the same sensors topic.
+  snprintf(topic, sizeof(topic), "homeassistant/sensor/%s_battery/config", DEV_ID);
+  snprintf(payload, sizeof(payload),
+    "{\"name\":\"Mist Maker Battery\",\"uniq_id\":\"%s_batt\","
+    "\"dev_cla\":\"battery\",\"unit_of_meas\":\"%%\","
+    "\"stat_t\":\"%s\",\"avty_t\":\"%s\","
+    "\"val_tpl\":\"{{ value_json.battery }}\",%s}",
+    DEV_ID, topicSensors, topicAvail, devBuf);
+  mqtt.publish(topic, payload, true);
 }
 
 void onMqtt(char* topic, byte* payload, unsigned int len) {
@@ -115,29 +137,53 @@ void onMqtt(char* topic, byte* payload, unsigned int len) {
   publishState();
 }
 
+// One (re)connect attempt + republish. Non-blocking by design: loop() retries
+// on a backoff, so the low-battery watchdog keeps running when WiFi or the
+// broker is down (a blocking connect loop would strand a weak cell).
 void connectMqtt() {
-  while (!mqtt.connected()) {
-    // LWT marks the device unavailable in HA if we drop off the network.
-    if (mqtt.connect(DEV_ID, MQTT_USER, MQTT_PASS,
-                     topicAvail, 0, true, "offline")) {
-      mqtt.publish(topicAvail, "online", true);
-      mqtt.subscribe(topicCmd);
-      publishDiscovery();
-      publishState();
-      publishSensors();
-      Serial.println("[MQTT] connected + discovery published");
-    } else {
-      Serial.print("[MQTT] connect failed rc=");
-      Serial.println(mqtt.state());
-      delay(2000);
-    }
+  if (mqtt.connected()) return;
+  // LWT marks the device unavailable in HA if we drop off the network.
+  if (mqtt.connect(DEV_ID, MQTT_USER, MQTT_PASS,
+                   topicAvail, 0, true, "offline")) {
+    mqtt.publish(topicAvail, "online", true);
+    mqtt.subscribe(topicCmd);
+    publishDiscovery();
+    publishState();
+    publishSensors();
+    Serial.println("[MQTT] connected + discovery published");
+  } else {
+    Serial.print("[MQTT] connect failed rc=");
+    Serial.println(mqtt.state());
   }
+}
+
+// Low-battery guard. batteryState() is ST-gated: it returns MIST_BATT_CHARGING
+// on USB, so this only fires on a genuinely dying cell — never while plugged in
+// to reflash. On CRITICAL: mark offline, mist off, radio off, deep-sleep to
+// protect the LiPo (recharge + reset/power-cycle wakes it).
+void checkBattery() {
+  // Require TWO consecutive CRITICAL reads (~10 s) before the irreversible
+  // deep-sleep. A single sample can lie: the boost sags BATT+ under mist load,
+  // and on a V0.3 board the sense pin floats — neither should strand the board.
+  static uint8_t critStreak = 0;
+  if (mist.batteryState() != MIST_BATT_CRITICAL) { critStreak = 0; return; }
+  if (++critStreak < 2) return;
+  Serial.println("[BATTERY] Critical on cell - graceful shutdown.");
+  mqtt.publish(topicAvail, "offline", true);
+  mqtt.loop();
+  delay(150);              // let the retained 'offline' flush before the radio dies
+  mist.shutdown();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(100);
+  esp_deep_sleep_start();
 }
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  mist.disableBattery();   // V0.3: D1 can't tell USB from battery (see note up top)
+  // On Battery Kit V0.3 (no ST pin) uncomment this so the unreliable D1 reading
+  // can't trigger a false low-battery shutdown:
   mist.begin();
 
   snprintf(topicCmd,     sizeof(topicCmd),     "mistmaker/%s/set",     DEV_ID);
@@ -148,9 +194,17 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.print("WiFi");
-  while (WiFi.status() != WL_CONNECTED) { delay(300); Serial.print("."); }
-  Serial.print(" connected: ");
-  Serial.println(WiFi.localIP());
+  // Bounded wait: don't block boot forever on a dead AP — the ESP32 keeps
+  // auto-reconnecting, and loop()'s battery watchdog must stay reachable.
+  const uint32_t wifiT0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiT0 < 20000) {
+    delay(300); Serial.print(".");
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print(" connected: "); Serial.println(WiFi.localIP());
+  } else {
+    Serial.println(" not up yet - continuing; will retry in the background.");
+  }
 
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setBufferSize(640); // discovery payloads are bigger than the default
@@ -161,7 +215,12 @@ void setup() {
 }
 
 void loop() {
-  if (!mqtt.connected()) connectMqtt();
+  // Retry MQTT on a 2 s backoff (not every iteration) so a down broker can't
+  // starve the rest of loop(), including the low-battery watchdog below.
+  if (!mqtt.connected() && millis() - lastMqttTry > 2000) {
+    lastMqttTry = millis();
+    connectMqtt();
+  }
   mqtt.loop();
 
   // Publish sensors (and re-probe water) every 60 s.
@@ -169,5 +228,11 @@ void loop() {
     lastSensorPub = millis();
     mist.probe();
     publishSensors();
+  }
+
+  // Low-battery guard every 5 s (no-op on USB / boards without a cell).
+  if (millis() - lastBattMs > 5000) {
+    lastBattMs = millis();
+    checkBattery();
   }
 }

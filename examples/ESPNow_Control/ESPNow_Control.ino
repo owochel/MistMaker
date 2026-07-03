@@ -19,7 +19,7 @@ void onEspNowRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, 
   if (len < (int)sizeof(MistMsg)) return;
   MistMsg msg;
   memcpy(&msg, incomingData, sizeof(MistMsg));
-  mist.applyLevel(msg.level);
+  mist.setLevel(msg.level);
 }
 
 void setup() {
