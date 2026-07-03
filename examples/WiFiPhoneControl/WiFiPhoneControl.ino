@@ -16,7 +16,7 @@
 // pin) switch the preset below and uncomment mist.disableBattery() in setup().
 //
 // Board: Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
-// Library: MistMaker >= 1.2.0
+// Library: MistMaker >= 2.0.0
 
 #include <MistMaker.h>
 #include <WiFi.h>

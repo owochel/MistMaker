@@ -26,7 +26,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 >   `mA ≈ oldVolts × 166.7` (e.g. an old `> 0.4` check becomes `> 67` mA).
 > - The constructor's last argument (duty cap) now **takes effect** — 1.x
 >   accepted and ignored it. Valid caps are `1..(2^pwmRes − 1)`; anything
->   else (including omitting it) resolves to the 50% sweet spot, which is
+>   else (including omitting it) resolves to the 50% efficiency knee, which is
 >   exactly the 1.x behavior. If an old sketch passed a valid value like
 >   `255` "for full power", it will now really drive that duty — remove the
 >   argument to keep the 1.x drive level.
@@ -106,6 +106,27 @@ mist.setSenseThresholds(10.0, 110.0, 70.0);
 // Different shunt/amp? Set V-per-A factor (gain × shunt):
 mist.setCurrentSenseFactor(3.0);  // INA180A3 (100 V/V) × 30 mΩ
 ```
+
+---
+
+## 🌫️ How much mist can it make? (duty cap, measured)
+
+The PWM duty cap is the library's "how hard to drive" ceiling, and it was
+bench-characterized on real V0.4 hardware (2026-07-03 duty sweep, 0→90%):
+
+| Duty cap | What you get |
+|---|---|
+| **127 (50%) — the default** | The efficiency sweet spot: ~90% of practical mist at ~¼ of peak power, cool components, battery-sustainable (~0.3 A from the cell). Ships as `DUTY_AUTO`. |
+| **`MistMakerDefaults::DUTY_TURBO` (178 ≈ 70%)** | The **true mist maximum** — output rises all the way to ~70% duty on this drive. Costs ~4× the input power, needs a strong 5 V supply (≥ 2 A wall adapter); a battery reaches it only seconds at full charge. |
+| Above ~75% | Measurably *worse*: mist declines and turns unstable while current climbs toward 2 A — the resonant fly-back gets clipped and the energy becomes heat. The library hard-limits at 90% of full scale. |
+
+```cpp
+mist.setMaxDuty(MistMakerDefaults::DUTY_TURBO);  // wall-powered "turbo"
+mist.setMaxDuty(MistMakerDefaults::DUTY_AUTO);   // back to the 50% default
+```
+
+Setting a cap doesn't change your sketch's `setLevel(0..255)` scale — 255
+always means "my current maximum."
 
 ---
 
@@ -209,7 +230,7 @@ probe/calibration timing constants sit at the top of `MistMaker.cpp`.
 ```cpp
 // --- construction ---
 MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
-          uint8_t pwmRes = 8, int dutyMax = DUTY_AUTO); // AUTO = 50% sweet spot
+          uint8_t pwmRes = 8, int dutyMax = DUTY_AUTO); // AUTO = 50% efficiency knee
 MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // bare pins
 
 // --- control ---
@@ -217,7 +238,7 @@ void begin();
 void turnOn();  void turnOff();  void toggle();  bool isOn();
 void setLevel(uint8_t level);    // 0..255 dimming
 uint8_t getLevel();
-void setMaxDuty(uint8_t duty);   // default 127 (50% = resonant sweet spot)
+void setMaxDuty(int duty);       // default 127 (50%); DUTY_TURBO=178 = measured peak
 void printStatus();
 
 // --- current sense / detection ---

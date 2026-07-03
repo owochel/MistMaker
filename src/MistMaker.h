@@ -42,12 +42,23 @@
 // ---------------------------------------------------------------------------
 namespace MistMakerDefaults {
   // Piezo drive. 108.7 kHz = disc resonance. The duty cap defaults to 50% of
-  // full scale (127 at 8-bit) because beyond 50% the resonant push-pull gets
-  // weaker, not stronger. DUTY_AUTO = "resolve to that 50% for whatever
-  // resolution is configured"; any out-of-range cap resolves the same way.
+  // full scale (127 at 8-bit) — the efficiency/stability knee, NOT a mist
+  // maximum. Bench sweep (V0.4, 2026-07-03): mist keeps increasing past 50%,
+  // but drive current goes superlinear (224 mA @50% -> 1.1 A @75%), the
+  // autotransformer saturates and runs hot by ~62%, and total USB draw
+  // (~1.5 A @75%) sags VBUS into a brownout reset. Raise the cap past 127
+  // only deliberately: strong supply, short bursts, watch L1's temperature.
+  // DUTY_AUTO = "resolve to that 50% for whatever resolution is configured";
+  // any out-of-range cap resolves the same way.
   constexpr uint32_t PWM_FREQ_HZ  = 108700;
   constexpr uint8_t  PWM_RES_BITS = 8;
   constexpr int      DUTY_AUTO    = 0;
+  // Bench-measured true mist maximum (~70% duty, V0.4 sweep 2026-07-03):
+  //   mist.setMaxDuty(MistMakerDefaults::DUTY_TURBO);
+  // Costs ~4x the input power of the default cap and needs a strong 5 V
+  // supply (>= 2 A wall adapter); on a battery expect the low-voltage
+  // cutoff within seconds. Above it mist gets weaker and unstable.
+  constexpr int      DUTY_TURBO   = 178;
 
   // Current sense: V per A = amp gain x shunt = INA180A3 (100 V/V) x 30 mOhm.
   constexpr float SENSE_VOLTS_PER_AMP = 3.0f;
@@ -146,7 +157,8 @@ class MistMaker {
 public:
   // Pin-preset constructor (preferred). `dutyMax` caps the PWM duty that
   // setLevel(255)/turnOn() reach. Valid range 1..(2^pwmRes - 1); anything
-  // else (including DUTY_AUTO) = 50% of full scale, the resonant sweet spot.
+  // else (including DUTY_AUTO) = 50% of full scale, the efficiency knee
+  // (see the MistMakerDefaults note before driving past it).
   MistMaker(const MistMakerPins &pins,
             uint32_t pwmFreq = MistMakerDefaults::PWM_FREQ_HZ,
             uint8_t  pwmRes  = MistMakerDefaults::PWM_RES_BITS,

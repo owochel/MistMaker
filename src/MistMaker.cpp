@@ -65,7 +65,7 @@ uint16_t MistMaker::resolveDutyCap(int requested) const {
   const uint16_t fullScale = (uint16_t)((1u << _pwmRes) - 1u);
   if (requested >= 1 && requested <= (int)fullScale) return (uint16_t)requested;
   // DUTY_AUTO, 0, negatives, or beyond full scale (incl. values 1.x ignored):
-  // 50% of full scale — the resonant sweet spot (127 at 8-bit).
+  // 50% of full scale — the efficiency/stability knee (127 at 8-bit).
   return (uint16_t)(fullScale / 2);
 }
 

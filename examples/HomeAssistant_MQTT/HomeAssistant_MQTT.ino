@@ -15,7 +15,7 @@
 // Requirements:
 //   * MQTT broker (the standard Mosquitto add-on) + MQTT integration in HA
 //   * Arduino library: PubSubClient (Library Manager)
-//   * MistMaker >= 1.2.0
+//   * MistMaker >= 2.0.0
 //
 // Prefer YAML/no-code? See the ESPHome config in the main repo:
 // Programmable-Mist-Maker/firmware-examples/home-assistant/esphome-mistmaker.yaml
