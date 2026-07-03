@@ -10,7 +10,7 @@
 // library can tell USB from the cell. This example publishes a battery %
 // sensor and deep-sleeps on a critically low cell — batteryState() reads
 // CHARGING on USB, so it never sleeps while plugged in. On V0.3 (no ST pin)
-// switch the preset below and uncomment mist.disableBattery() in setup().
+// switch the preset below — its preset ships with battery sensing off.
 //
 // Requirements:
 //   * MQTT broker (the standard Mosquitto add-on) + MQTT integration in HA
@@ -29,7 +29,7 @@
 
 // ---- Select your board (uncomment exactly ONE) ----
 MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board: use this + uncomment disableBattery() (D8 floats on V0.3)
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 
@@ -184,7 +184,6 @@ void setup() {
   delay(1000);
   // On Battery Kit V0.3 (no ST pin) uncomment this so the unreliable D1 reading
   // can't trigger a false low-battery shutdown:
-  // mist.disableBattery();
   mist.begin();
 
   snprintf(topicCmd,     sizeof(topicCmd),     "mistmaker/%s/set",     DEV_ID);

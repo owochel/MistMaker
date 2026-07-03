@@ -25,11 +25,11 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 >   milliamps via the 3.0 V/A sense factor. Convert old thresholds with
 >   `mA ≈ oldVolts × 166.7` (e.g. an old `> 0.4` check becomes `> 67` mA).
 > - The constructor's last argument (duty cap) now **takes effect** — 1.x
->   accepted and ignored it. Valid caps are `1..(2^pwmRes − 1)`; anything
->   else (including omitting it) resolves to the 50% efficiency knee, which is
->   exactly the 1.x behavior. If an old sketch passed a valid value like
->   `255` "for full power", it will now really drive that duty — remove the
->   argument to keep the 1.x drive level.
+>   accepted and ignored it. Valid caps are `1..90% of full scale` (higher
+>   requests clamp to 90% — above it the drive makes heat, not mist);
+>   zero/negative/omitted resolve to the 50% efficiency knee, which is exactly
+>   the 1.x behavior. If an old sketch passed a valid value like `200`, it
+>   will now really drive that duty — remove the argument to keep 1.x drive.
 > - Everything else is source-compatible.
 
 ---
@@ -50,7 +50,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 
 // One line per board — pick yours:
 MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board: use this + call disableBattery() (D8 floats on V0.3)
+// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off — no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
 // MistMaker mist(MistMakerLegacyV1());
@@ -133,7 +133,7 @@ always means "my current maximum."
 ## 🔋 Battery Monitoring (Battery Kit)
 
 ```cpp
-float v   = mist.readBatteryVolts();   // calibrated mV via the on-board divider
+float v   = mist.readBatteryVolts();   // calibrated volts via the on-board divider
 uint8_t p = mist.batteryPercent();     // rough LiPo gauge for UIs
 
 if (mist.batteryCritical()) {          // hysteresis built in; false on USB
@@ -155,9 +155,10 @@ calibrated `analogReadMilliVolts()` (linear even on the C6).
 >   `MistMakerBatteryKitV04()` preset self-gates: `batteryState()` returns
 >   `MIST_BATT_CHARGING` on USB and only ever reports `LOW`/`CRITICAL` on the
 >   cell. Use `usbPresent()` / `onBattery()` to read the source yourself.
-> - **Battery Kit V0.3** has no ST pin, so call `mist.disableBattery();` before
->   `begin()` to switch battery sensing off (every `battery*` call then behaves
->   as on a board with no cell).
+> - **Battery Kit V0.3** has no ST pin, so its preset ships with battery
+>   sensing **off** (every `battery*` call behaves as on a board with no
+>   cell). `disableBattery()` remains for switching it off at runtime on
+>   custom builds.
 
 ---
 
@@ -230,7 +231,8 @@ probe/calibration timing constants sit at the top of `MistMaker.cpp`.
 ```cpp
 // --- construction ---
 MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
-          uint8_t pwmRes = 8, int dutyMax = DUTY_AUTO); // AUTO = 50% efficiency knee
+          uint8_t pwmRes = 8,
+          int dutyMax = MistMakerDefaults::DUTY_AUTO); // AUTO = 50% efficiency knee
 MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // bare pins
 
 // --- control ---
@@ -257,7 +259,7 @@ bool    usbPresent();            // load on USB (mux VIN1)? true if no sense pin
 bool    onBattery();             // load on the cell (mux VIN2)? = valid SoC
 
 // --- battery ---
-float   readBatteryVolts(uint8_t samples = 16);    // calibrated mV
+float   readBatteryVolts(uint8_t samples = 16);    // calibrated volts
 uint8_t batteryPercent();
 MistBatteryState batteryState(); // OK/LOW/CRITICAL/CHARGING, ST-gated + hysteresis
 bool    batteryLow();   bool batteryCritical();
