@@ -17,7 +17,7 @@
 // the disc is missing or the water runs out; refill/reattach and it resumes.
 //
 // Board: Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
-// Library: MistMaker >= 1.1.0
+// Library: MistMaker >= 2.0.0
 
 #include <MistMaker.h>
 

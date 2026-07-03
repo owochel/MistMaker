@@ -109,6 +109,27 @@ mist.setCurrentSenseFactor(3.0);  // INA180A3 (100 V/V) × 30 mΩ
 
 ---
 
+## 🌫️ How much mist can it make? (duty cap, measured)
+
+The PWM duty cap is the library's "how hard to drive" ceiling, and it was
+bench-characterized on real V0.4 hardware (2026-07-03 duty sweep, 0→90%):
+
+| Duty cap | What you get |
+|---|---|
+| **127 (50%) — the default** | The efficiency sweet spot: ~90% of practical mist at ~¼ of peak power, cool components, battery-sustainable (~0.3 A from the cell). Ships as `DUTY_AUTO`. |
+| **`MistMakerDefaults::DUTY_TURBO` (178 ≈ 70%)** | The **true mist maximum** — output rises all the way to ~70% duty on this drive. Costs ~4× the input power, needs a strong 5 V supply (≥ 2 A wall adapter); a battery reaches it only seconds at full charge. |
+| Above ~75% | Measurably *worse*: mist declines and turns unstable while current climbs toward 2 A — the resonant fly-back gets clipped and the energy becomes heat. The library hard-limits at 90% of full scale. |
+
+```cpp
+mist.setMaxDuty(MistMakerDefaults::DUTY_TURBO);  // wall-powered "turbo"
+mist.setMaxDuty(MistMakerDefaults::DUTY_AUTO);   // back to the 50% default
+```
+
+Setting a cap doesn't change your sketch's `setLevel(0..255)` scale — 255
+always means "my current maximum."
+
+---
+
 ## 🔋 Battery Monitoring (Battery Kit)
 
 ```cpp
@@ -217,7 +238,7 @@ void begin();
 void turnOn();  void turnOff();  void toggle();  bool isOn();
 void setLevel(uint8_t level);    // 0..255 dimming
 uint8_t getLevel();
-void setMaxDuty(int duty);       // default 127; past 50% = 5x power, hot L1
+void setMaxDuty(int duty);       // default 127 (50%); DUTY_TURBO=178 = measured peak
 void printStatus();
 
 // --- current sense / detection ---

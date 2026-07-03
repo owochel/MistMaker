@@ -53,6 +53,12 @@ namespace MistMakerDefaults {
   constexpr uint32_t PWM_FREQ_HZ  = 108700;
   constexpr uint8_t  PWM_RES_BITS = 8;
   constexpr int      DUTY_AUTO    = 0;
+  // Bench-measured true mist maximum (~70% duty, V0.4 sweep 2026-07-03):
+  //   mist.setMaxDuty(MistMakerDefaults::DUTY_TURBO);
+  // Costs ~4x the input power of the default cap and needs a strong 5 V
+  // supply (>= 2 A wall adapter); on a battery expect the low-voltage
+  // cutoff within seconds. Above it mist gets weaker and unstable.
+  constexpr int      DUTY_TURBO   = 178;
 
   // Current sense: V per A = amp gain x shunt = INA180A3 (100 V/V) x 30 mOhm.
   constexpr float SENSE_VOLTS_PER_AMP = 3.0f;

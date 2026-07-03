@@ -25,7 +25,7 @@
 //   2. Fill in WIFI_SSID / WIFI_PASS / RELAY_HOST below.
 //   3. Flash. Open the app URL on your phone. Your maker appears in the list.
 //
-// Library: MistMaker >= 1.1.0  +  "WebSockets" by Markus Sattler (Library Mgr)
+// Library: MistMaker >= 2.0.0  +  "WebSockets" by Markus Sattler (Library Mgr)
 // Board:   Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
 
 #include <MistMaker.h>
