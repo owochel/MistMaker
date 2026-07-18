@@ -7,12 +7,12 @@
 // preset that matches your PCB below.
 //
 // Board: Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
-// Library: MistMaker >= 2.0.0
+// Library: MistMaker >= 2.1.0
 
 #include <MistMaker.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+MistMaker mist(MistMakerBatteryKitV041());  // V0.4/V0.4.1: ST on D8 gates battery vs USB
 // MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
