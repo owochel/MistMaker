@@ -15,7 +15,7 @@
 // Requirements:
 //   * MQTT broker (the standard Mosquitto add-on) + MQTT integration in HA
 //   * Arduino library: PubSubClient (Library Manager)
-//   * MistMaker >= 2.0.0
+//   * MistMaker >= 2.1.0
 //
 // Prefer YAML/no-code? See the ESPHome config in the main repo:
 // Programmable-Mist-Maker/firmware-examples/home-assistant/esphome-mistmaker.yaml
@@ -28,7 +28,7 @@
 #include <esp_sleep.h>          // deep sleep on a critically low cell
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+MistMaker mist(MistMakerBatteryKitV041());  // V0.4/V0.4.1: ST on D8 gates battery vs USB
 // MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());

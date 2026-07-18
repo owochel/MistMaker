@@ -3,6 +3,10 @@
 
 #include <Arduino.h>
 
+// Library version — keep in lockstep with library.properties. Sketches can
+// print it in banners/test reports: Serial.println(MISTMAKER_VERSION);
+#define MISTMAKER_VERSION "2.1.0"
+
 // ===========================================================================
 // MistMaker — Arduino library for the Programmable Mist Maker (OSHWA US002742)
 //
@@ -11,6 +15,10 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
+// v2.1   Battery Kit V0.4.1 (July 2026 production run): new preset
+//        MistMakerBatteryKitV041() — same pin map as V0.4, the spin changed
+//        passives only (D8 USB-high now ~3.1 V, boost rail boots OFF).
+//        Adds MISTMAKER_VERSION and keywords.txt. No API changes.
 // v2.0 — cleanup release:
 //   * hardware tuning values are named constants in MistMakerDefaults (below);
 //     probe/calibration timing lives at the top of MistMaker.cpp
@@ -123,6 +131,15 @@ inline MistMakerPins MistMakerBatteryKitV03() {
 // on D8, so battery monitoring gates itself on the real power source.
 inline MistMakerPins MistMakerBatteryKitV04() {
   return MistMakerPins{ D0, D3, D2, D7, D6, D1, D8 };
+}
+
+// Mist Maker Battery Kit V0.4.1 — the July 2026 production spin (the boards
+// sold assembled). Same pin map as V0.4; the changes were passive (R22 220k
+// stiffens D8's USB-high to ~3.1 V, R8 pull-down boots the ~5 V rail OFF,
+// R7 dims LED2), so the two presets are interchangeable — this one exists so
+// a sketch can name the revision printed on its silkscreen.
+inline MistMakerPins MistMakerBatteryKitV041() {
+  return MistMakerBatteryKitV04();
 }
 
 // Block Kit V0.1 — OHS 2026 demo board (reed on D10, IS31FL3731 LEDs on I2C).

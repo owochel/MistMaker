@@ -1,0 +1,74 @@
+#######################################
+# Syntax Coloring Map for MistMaker
+# (fields are TAB-separated — required by the IDE)
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+MistMaker	KEYWORD1
+MistMakerPins	KEYWORD1
+MistSenseState	KEYWORD1
+MistBatteryState	KEYWORD1
+MistMakerDefaults	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+turnOn	KEYWORD2
+turnOff	KEYWORD2
+toggle	KEYWORD2
+isOn	KEYWORD2
+printStatus	KEYWORD2
+setLevel	KEYWORD2
+getLevel	KEYWORD2
+setMaxDuty	KEYWORD2
+setCurrentSenseFactor	KEYWORD2
+readCurrentMa	KEYWORD2
+setSenseThresholds	KEYWORD2
+autoCalibrateSense	KEYWORD2
+probe	KEYWORD2
+discPresent	KEYWORD2
+senseState	KEYWORD2
+lastProbeMa	KEYWORD2
+setUsbSensePin	KEYWORD2
+usbPresent	KEYWORD2
+onBattery	KEYWORD2
+disableBattery	KEYWORD2
+setBatteryDivider	KEYWORD2
+setBatteryThresholds	KEYWORD2
+readBatteryVolts	KEYWORD2
+batteryPercent	KEYWORD2
+batteryState	KEYWORD2
+batteryLow	KEYWORD2
+batteryCritical	KEYWORD2
+shutdown	KEYWORD2
+MistMakerExtensionV01	KEYWORD2
+MistMakerBatteryKitV03	KEYWORD2
+MistMakerBatteryKitV04	KEYWORD2
+MistMakerBatteryKitV041	KEYWORD2
+MistMakerBlockKitV01	KEYWORD2
+MistMakerLegacyV1	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+MISTMAKER_VERSION	LITERAL1
+MIST_SENSE_UNKNOWN	LITERAL1
+MIST_DISC_MISSING	LITERAL1
+MIST_WATER_OK	LITERAL1
+MIST_WATER_LOW	LITERAL1
+MIST_DISC_DISCONNECTED	LITERAL1
+MIST_BATT_UNKNOWN	LITERAL1
+MIST_BATT_OK	LITERAL1
+MIST_BATT_LOW	LITERAL1
+MIST_BATT_CRITICAL	LITERAL1
+MIST_BATT_CHARGING	LITERAL1
+PWM_FREQ_HZ	LITERAL1
+PWM_RES_BITS	LITERAL1
+DUTY_AUTO	LITERAL1
+DUTY_TURBO	LITERAL1

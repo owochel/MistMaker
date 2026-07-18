@@ -13,10 +13,15 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - **Current sensing in mA** with auto or manual calibration
 - **Piezo disc + water detection** — one ADC pin tells you if a disc is attached, if it fell off, and if the water ran out
 - **Battery monitoring** — calibrated voltage, percent estimate, and a graceful low-battery shutdown to prevent brown-outs
-- **Power-source sensing** — reads the TPS2116 mux status (Battery Kit V0.4) so battery logic knows USB from the cell and never false-triggers
+- **Power-source sensing** — reads the TPS2116 mux status (Battery Kit V0.4+) so battery logic knows USB from the cell and never false-triggers
 - **Pin presets for every official board variant** — one line to target your PCB
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
 - Modular and reusable class-based structure
+
+> **New in v2.1:** `MistMakerBatteryKitV041()` preset for the July 2026
+> production board (same pins as V0.4 — the spin changed passives only), the
+> `MISTMAKER_VERSION` string for banners/test reports, and `keywords.txt`
+> (IDE syntax highlighting). No API changes — 2.0 sketches compile unchanged.
 
 > **Upgrading to v2.0?**
 > - `applyLevel(x)` → `setLevel(x)` (true rename, same 0..255 meaning).
@@ -49,7 +54,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 #include <MistMaker.h>
 
 // One line per board — pick yours:
-MistMaker mist(MistMakerBatteryKitV04());   // V0.4 board: ST on D8 gates battery vs USB
+MistMaker mist(MistMakerBatteryKitV041());  // current production board (V0.4: same pins — either works)
 // MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off — no ST pin)
 // MistMaker mist(MistMakerExtensionV01());
 // MistMaker mist(MistMakerBlockKitV01());
@@ -151,10 +156,10 @@ calibrated `analogReadMilliVolts()` (linear even on the C6).
 > state-of-charge) on USB — reading it blindly caused false low-battery
 > shutdowns.
 >
-> - **Battery Kit V0.4** routes the mux **ST** (status) pin to **D8**, so the
->   `MistMakerBatteryKitV04()` preset self-gates: `batteryState()` returns
->   `MIST_BATT_CHARGING` on USB and only ever reports `LOW`/`CRITICAL` on the
->   cell. Use `usbPresent()` / `onBattery()` to read the source yourself.
+> - **Battery Kit V0.4 / V0.4.1** route the mux **ST** (status) pin to **D8**, so
+>   the `MistMakerBatteryKitV041()` / `...V04()` presets self-gate: `batteryState()`
+>   returns `MIST_BATT_CHARGING` on USB and only ever reports `LOW`/`CRITICAL` on
+>   the cell. Use `usbPresent()` / `onBattery()` to read the source yourself.
 > - **Battery Kit V0.3** has no ST pin, so its preset ships with battery
 >   sensing **off** (every `battery*` call behaves as on a board with no
 >   cell). `disableBattery()` remains for switching it off at runtime on
@@ -254,7 +259,7 @@ MistSenseState senseState();
 float lastProbeMa();
 
 // --- power source (mux status, V0.4+) ---
-void    setUsbSensePin(int8_t pin);                // TPS2116 ST (Battery Kit V0.4 = D8)
+void    setUsbSensePin(int8_t pin);                // TPS2116 ST (Battery Kit V0.4+ = D8)
 bool    usbPresent();            // load on USB (mux VIN1)? true if no sense pin
 bool    onBattery();             // load on the cell (mux VIN2)? = valid SoC
 
