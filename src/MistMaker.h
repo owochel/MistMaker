@@ -5,7 +5,7 @@
 
 // Library version — keep in lockstep with library.properties. Sketches can
 // print it in banners/test reports: Serial.println(MISTMAKER_VERSION);
-#define MISTMAKER_VERSION "2.1.0"
+#define MISTMAKER_VERSION "2.2.0"
 
 // ===========================================================================
 // MistMaker — Arduino library for the Programmable Mist Maker (OSHWA US002742)
@@ -15,6 +15,8 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
+// v2.2   Examples curated to four (Blink, Ramp, WaterDetect, PhoneDemo),
+//        all runnable as-is on the two boards in the shop. No API changes.
 // v2.1   Battery Kit V0.4.1 (July 2026 production run): new preset
 //        MistMakerBatteryKitV041() — same pin map as V0.4, the spin changed
 //        passives only (D8 USB-high now ~3.1 V, boost rail boots OFF).

@@ -26,9 +26,8 @@ jobs:
               source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
           libraries: |
             - source-path: ./        # this library
-            - name: PubSubClient     # HomeAssistant_MQTT example
-            - name: WebSockets       # PhoneSensors example (Markus Sattler)
-            - name: ArduinoJson      # PhoneSensors example (command parsing)
+            - name: WebSockets       # PhoneDemo example (Markus Sattler)
+            - name: ArduinoJson      # PhoneDemo example (command parsing)
           sketch-paths: |
             - examples
           enable-warnings-report: true

@@ -7,7 +7,7 @@ choreograph several at once — all from one cute web page. Built for workshops.
    📱 phone (this web app, on HTTPS)              ☁ Cloudflare              🌫 mist makers
    ┌───────────────────────────────┐        ┌──────────────────┐        ┌────────────────┐
    │ reads its OWN sensors,         │  wss   │  Worker + Durable │  wss   │ XIAO ESP32-C6  │
-   │ turns them into a 0-100 level  │ ─────► │  Object = "room"  │ ─────► │ PhoneSensors   │
+   │ turns them into a 0-100 level  │ ─────► │  Object = "room"  │ ─────► │ PhoneDemo      │
    │ (mic/light/face/FFT/...)       │        │  passes messages  │        │ .ino (thin)    │
    │ + shows every maker's status   │ ◄───── │  both directions  │ ◄───── │ reports status │
    └───────────────────────────────┘        └──────────────────┘        └────────────────┘
@@ -85,13 +85,13 @@ rate lives in `SEND_HZ` at the top of `public/app.js` if you ever want to tune i
 
 ---
 
-## Part B — flash the makers (`examples/PhoneSensors`)
+## Part B — flash the makers (`examples/PhoneDemo`)
 
 Each mist maker runs the **same** sketch. Flash it once per board.
 
 1. In Arduino IDE, install the library **"WebSockets" by Markus Sattler**
    (Library Manager) — plus MistMaker, as usual.
-2. Open `examples/PhoneSensors/PhoneSensors.ino`.
+2. Open `examples/PhoneDemo/PhoneDemo.ino`.
 3. Fill in the four lines near the top:
    ```cpp
    const char* WIFI_SSID  = "your-wifi";
@@ -162,4 +162,4 @@ Open your Worker URL on a phone, then:
 | `src/worker.js` | The Worker + Durable Object "room" (the relay) |
 | `public/index.html` · `app.css` · `app.js` | The phone web app (cute, vanilla, no build step) |
 
-Pairs with `examples/PhoneSensors/PhoneSensors.ino` (the firmware every maker runs).
+Pairs with `examples/PhoneDemo/PhoneDemo.ino` (the firmware every maker runs).

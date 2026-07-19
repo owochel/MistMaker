@@ -169,16 +169,19 @@ calibrated `analogReadMilliVolts()` (linear even on the C6).
 
 ## 📚 Examples
 
+Four examples, in the order to try them — each runs as-is on the Battery Kit
+and the Extension Kit:
+
 | Example | What it shows |
 |---|---|
-| `MistBlink` | Hello-world: 6 s ON / 3 s OFF cycle |
-| `MistDimming` | Organic "breathing" mist with `setLevel()` |
-| `WaterDetect` | Disc + water detection, auto-calibration, auto-recovery |
-| `WiFiPhoneControl` | Phone control via the board's own WiFi AP + web UI |
-| `PhoneSensors` | Drive the mist from a phone's mic/light/motion/face/music via a Cloudflare relay; sync many makers ([extras/phone-app](extras/phone-app)) |
-| `HomeAssistant_MQTT` | Native Home Assistant device via MQTT Discovery |
-| `Blink`, `SimpleControl`, `Ramping` | v1.0 basics (button toggle, level ramp) |
-| `ESPNow_Control` | Show-control via ESP-NOW (no router needed) |
+| `Blink` | Hello-world: mist 6 s on / 3 s off, LED follows |
+| `Breath` | Mist that breathes — smooth fade in, hold, fade out with `setLevel()` |
+| `WaterDetect` | Self-minding mist: stops when water runs out or the disc comes off, resumes by itself; `'c'` auto-calibrates |
+| `PhoneDemo` | Drive the mist from a phone's mic/light/motion/face/music via a Cloudflare relay; sync many makers ([extras/phone-app](extras/phone-app)) |
+
+(Older examples — MQTT/Home Assistant, ESP-NOW, WiFi AP control — live in the
+[v2.1.0 release](https://github.com/owochel/MistMaker/releases/tag/v2.1.0) if
+you need them.)
 
 All examples are in `File > Examples > MistMaker` after installation.
 
@@ -218,7 +221,7 @@ If you are using a different board and wish to adapt the library, you may need t
 3. Select the downloaded ZIP file in Arduino IDE.
 
 4. You're done! Now you can access example code via:
-   `File > Examples > MistMaker > MistBlink`
+   `File > Examples > MistMaker > Blink`
 
 ### 🛠 Option 2: Manual Installation
 
