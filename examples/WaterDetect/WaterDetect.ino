@@ -1,37 +1,27 @@
-// WaterDetect — piezo disc + water-level detection through current sensing.
+// MistMaker — WaterDetect
+// Mist that looks after itself: it knows when the water runs out or the
+// disc comes off, stops, and resumes on its own once you fix it.
 //
-// The mist boards measure piezo current through a shunt + INA180A3 amplifier.
-// A missing disc, a dry disc, and a disc in water each draw a distinctly
-// different current at a given PWM duty, so one ADC pin gives you:
-//   * disc presence detection (is a piezo attached at all?)
-//   * water-level detection  (is there still water to mist?)
-//   * disconnect detection   (did the disc fall off mid-run?)
+// The board measures the disc's current draw — a disc in water, a dry disc,
+// and no disc all read differently, so one sensor tells the whole story.
+// This sketch mists 6 s on / 3 s off, checks the disc in every pause, and
+// waits (retrying) whenever something is wrong.
 //
-// Thresholds: the library ships with bench-measured defaults
-// (disc present > 10 mA at duty 10, water low < 110 mA at duty 64).
-// Send 'c' over Serial to auto-calibrate against YOUR disc + water instead —
-// then copy the printed values into setSenseThresholds() below.
+// Open Serial Monitor at 115200 to watch it think — every pause prints the
+// measured current and what the board concluded from it.
 //
-// Behavior: mists 6 s ON / 3 s OFF while water is OK. Probes during every
-// OFF window. Stops (and blinks the status LED if your board has one) when
-// the disc is missing or the water runs out; refill/reattach and it resumes.
-//
-// Board: Seeed XIAO ESP32-C6 (select XIAO_ESP32C6 in Tools > Board)
-// Library: MistMaker >= 2.1.0
+// Works on the Battery Kit and the Extension Kit as wired below.
+// Board: Seeed XIAO ESP32-C6 — pick "XIAO_ESP32C6" in Tools > Board.
 
 #include <MistMaker.h>
 
-// ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV041());  // V0.4/V0.4.1: ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
-// MistMaker mist(MistMakerExtensionV01());
-// MistMaker mist(MistMakerBlockKitV01());
-// MistMaker mist(MistMakerLegacyV1());
+// MistMaker pins
+const int MIST_OUTPUT_PIN = D0;
+const int CURRENT_SENSE_PIN = D2;
+const int EN_PIN = D3;
+const int LED_PIN = D7;
 
-// Optional: after running auto-calibration once, hard-code your thresholds
-// here so every boot starts calibrated (values in mA):
-// (disc present, water low, disc disconnected)
-// mist.setSenseThresholds(10.0, 110.0, 70.0);
+MistMaker mist(MIST_OUTPUT_PIN, EN_PIN, CURRENT_SENSE_PIN, LED_PIN);
 
 const unsigned long ON_TIME_MS  = 6000;
 const unsigned long OFF_TIME_MS = 3000;
@@ -41,36 +31,30 @@ unsigned long phaseStart = 0;
 
 const char* stateName(MistSenseState s) {
   switch (s) {
-    case MIST_WATER_OK:          return "WATER_OK";
-    case MIST_WATER_LOW:         return "WATER_LOW";
-    case MIST_DISC_MISSING:      return "DISC_MISSING";
-    case MIST_DISC_DISCONNECTED: return "DISC_DISCONNECTED";
-    default:                     return "UNKNOWN";
+    case MIST_WATER_OK:          return "water OK";
+    case MIST_WATER_LOW:         return "water LOW - refill soon";
+    case MIST_DISC_MISSING:      return "no disc found";
+    case MIST_DISC_DISCONNECTED: return "disc came off";
+    default:                     return "checking...";
   }
 }
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  // (Battery Kit V0.3? Its preset ships with battery sensing off - no ST pin.)
   mist.begin();
 
-  Serial.println("WaterDetect: 'c' = auto-calibrate (disc attached, in water)");
-  Serial.println("Probing for disc + water...");
+  Serial.println("WaterDetect - watching the disc...");
   MistSenseState s = mist.probe();
-  Serial.print("Initial state: ");
+  Serial.print("Starting state: ");
   Serial.println(stateName(s));
   phaseStart = millis();
 }
 
 void loop() {
-  // Serial command: 'c' runs auto-calibration.
-  if (Serial.available() && Serial.read() == 'c') {
-    mist.turnOff();
-    misting = false;
-    mist.autoCalibrateSense();
-    phaseStart = millis();
-  }
+  // Auto-calibration is off for now while its thresholds get re-tuned on
+  // production boards; the built-in defaults apply. To experiment anyway,
+  // call mist.autoCalibrateSense() with the disc attached and in water.
 
   const MistSenseState s = mist.senseState();
   const bool okToMist = (s == MIST_WATER_OK || s == MIST_WATER_LOW);
@@ -81,32 +65,28 @@ void loop() {
       mist.turnOff();
       misting = false;
       phaseStart = millis();
-      // Probe during the OFF window so the user never sees the hiccup.
-      MistSenseState ns = mist.probe();
-      Serial.print("probe: ");
+      // Check the disc during the pause, so the rhythm never stutters.
+      MistSenseState now = mist.probe();
       Serial.print(mist.lastProbeMa(), 1);
       Serial.print(" mA -> ");
-      Serial.println(stateName(ns));
+      Serial.println(stateName(now));
     } else if (!misting && elapsed >= OFF_TIME_MS) {
       mist.turnOn();
       misting = true;
       phaseStart = millis();
     }
   } else {
-    // Disc missing / disconnected / unknown: stay off, re-probe every 5 s
-    // so reattaching the disc or refilling water auto-resumes.
+    // Something's wrong: stay off, re-check every 5 s. Refill the water or
+    // reattach the disc and it resumes by itself.
     if (misting) { mist.turnOff(); misting = false; }
     static unsigned long lastRetry = 0;
     if (millis() - lastRetry > 5000) {
       lastRetry = millis();
-      MistSenseState ns = mist.probe();
-      Serial.print("waiting (");
-      Serial.print(stateName(ns));
-      Serial.print(") probe ");
-      Serial.print(mist.lastProbeMa(), 1);
-      Serial.println(" mA");
-      if (ns == MIST_WATER_OK) {
-        Serial.println("Recovered! Resuming mist cycle.");
+      MistSenseState now = mist.probe();
+      Serial.print("waiting: ");
+      Serial.println(stateName(now));
+      if (now == MIST_WATER_OK) {
+        Serial.println("All good again - resuming.");
         phaseStart = millis();
       }
     }

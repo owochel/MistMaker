@@ -1,4 +1,4 @@
-// PhoneSensors — drive the mist from your phone's sensors, over the internet.
+// PhoneDemo — drive the mist from your phone's sensors, over the internet.
 //
 // This is the "thin client" half of the phone-sensor demo. The phone web app
 // (see extras/phone-app/) does ALL the heavy lifting — mic, light, motion,
@@ -35,10 +35,8 @@
 #include <ArduinoJson.h>
 
 // ---- Select your board (uncomment exactly ONE) ----
-MistMaker mist(MistMakerBatteryKitV041());  // V0.4/V0.4.1: ST on D8 gates battery vs USB
-// MistMaker mist(MistMakerBatteryKitV03()); // V0.3 board (battery sensing off - no ST pin)
-// MistMaker mist(MistMakerExtensionV01());
-// MistMaker mist(MistMakerBlockKitV01());
+MistMaker mist(MistMakerBatteryKitV041());   // Battery Kit
+// MistMaker mist(MistMakerExtensionV01());  // Extension Kit
 
 // ---- Your WiFi + your deployed relay ----
 const char* WIFI_SSID  = "your-wifi";
