@@ -18,6 +18,12 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
 - Modular and reusable class-based structure
 
+> **New in v2.4:** `PhoneDemo` restores the first-boot WiFi setup portal and
+> local board-button control, gives every fresh maker a private two-word room,
+> and lets the phone app move makers between rooms over the air. The bundled
+> Cloudflare relay and phone UI have been updated to support the new setup and
+> room workflow. There are no core library API changes.
+
 > **New in v2.3:** bare constructor accepts optional `button` / `battery` /
 > `usbSense` pins; runtime `setButtonPin()` / `disableButton()` /
 > `setBatteryPin()`; and `buttonPressed()` / `buttonPin()` helpers (raw

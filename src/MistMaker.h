@@ -5,7 +5,7 @@
 
 // Library version — keep in lockstep with library.properties. Sketches can
 // print it in banners/test reports: Serial.println(MISTMAKER_VERSION);
-#define MISTMAKER_VERSION "2.3.0"
+#define MISTMAKER_VERSION "2.4.0"
 
 // ===========================================================================
 // MistMaker — Arduino library for the Programmable Mist Maker (OSHWA US002742)
@@ -15,6 +15,9 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
+// v2.4   PhoneDemo restores the WiFi setup portal and local button control,
+//        adds private two-word rooms, and lets the phone app move makers
+//        between rooms over the air. No core API changes.
 // v2.3   Bare constructor accepts optional button/battery/usbSense pins;
 //        runtime setButtonPin/disableButton/setBatteryPin; buttonPressed()
 //        / buttonPin() helpers (raw level, no debounce). Four-pin calls remain
