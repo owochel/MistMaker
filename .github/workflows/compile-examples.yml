@@ -2,19 +2,43 @@ name: Compile Examples
 
 on:
   push:
-    paths: ["src/**", "examples/**", ".github/workflows/compile-examples.yml"]
+    paths:
+      - "src/**"
+      - "examples/**"
+      - "README.md"
+      - "keywords.txt"
+      - "library.properties"
+      - ".github/workflows/compile-examples.yml"
   pull_request:
+    paths:
+      - "src/**"
+      - "examples/**"
+      - "README.md"
+      - "keywords.txt"
+      - "library.properties"
+      - ".github/workflows/compile-examples.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compile-examples-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   compile:
+    name: ${{ matrix.board }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        fqbn:
-          - esp32:esp32:XIAO_ESP32C6   # production target
-          - esp32:esp32:XIAO_ESP32S3   # secondary target
+        include:
+          - board: XIAO ESP32-C6
+            fqbn: esp32:esp32:XIAO_ESP32C6
+          - board: XIAO ESP32-S3
+            fqbn: esp32:esp32:XIAO_ESP32S3
     steps:
       - uses: actions/checkout@v4
       - name: Compile all examples
@@ -23,6 +47,7 @@ jobs:
           fqbn: ${{ matrix.fqbn }}
           platforms: |
             - name: esp32:esp32
+              version: 3.3.10
               source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
           libraries: |
             - source-path: ./        # this library

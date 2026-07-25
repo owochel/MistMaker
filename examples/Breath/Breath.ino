@@ -1,6 +1,6 @@
 // MistMaker — Breath
 // Mist that breathes: in... hold... out... rest. Like an LED breathing,
-// but with fog.
+// but with mist.
 //
 // setLevel(0..255) dims mist like an LED. The breath starts at MIN_LEVEL
 // instead of 0 because mist only becomes visible around there — starting

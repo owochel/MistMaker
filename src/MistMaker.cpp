@@ -35,9 +35,10 @@ namespace {
 // Constructors
 // ---------------------------------------------------------------------------
 MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
+                     int buttonPin, int battPin, int usbSensePin,
                      uint32_t pwmFreq, uint8_t pwmRes, int dutyMax)
   : _mistPin(mistPin), _enPin(enPin), _sensePin(sensePin), _ledPin(ledPin),
-    _buttonPin(-1), _battPin(-1), _usbSensePin(-1),
+    _buttonPin(buttonPin), _battPin(battPin), _usbSensePin(usbSensePin),
     _pwmFreq(pwmFreq), _pwmRes(pwmRes < 1 ? 1 : (pwmRes > 16 ? 16 : pwmRes)),
     // _pwmRes is initialized above (declaration order), so this is safe:
     _dutyMax(resolveDutyCap(dutyMax)), _level(0), _state(false), _startTime(0),
@@ -55,11 +56,9 @@ MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
 
 MistMaker::MistMaker(const MistMakerPins &p,
                      uint32_t pwmFreq, uint8_t pwmRes, int dutyMax)
-  : MistMaker(p.mist, p.boostEn, p.sense, p.led, pwmFreq, pwmRes, dutyMax) {
-  _buttonPin   = p.button;
-  _battPin     = p.battery;
-  _usbSensePin = p.usbSense;
-}
+  : MistMaker(p.mist, p.boostEn, p.sense, p.led,
+              p.button, p.battery, p.usbSense,
+              pwmFreq, pwmRes, dutyMax) {}
 
 uint16_t MistMaker::resolveDutyCap(int requested) const {
   const uint16_t fullScale = (uint16_t)((1u << _pwmRes) - 1u);
@@ -247,8 +246,39 @@ bool MistMaker::autoCalibrateSense() {
 }
 
 // ---------------------------------------------------------------------------
+// Button
+// ---------------------------------------------------------------------------
+void MistMaker::setButtonPin(int8_t pin) {
+  _buttonPin = pin;
+  // Safe to call before or after begin(): re-apply pinMode when enabling.
+  if (_buttonPin >= 0) pinMode(_buttonPin, INPUT); // PCB has its own pull-down
+}
+
+bool MistMaker::buttonPressed() const {
+  if (_buttonPin < 0) return false;
+  // Active-HIGH: external pull-down on the PCB holds LOW until pressed.
+  return digitalRead(_buttonPin) == HIGH;
+}
+
+// ---------------------------------------------------------------------------
 // Battery + power source
 // ---------------------------------------------------------------------------
+void MistMaker::setUsbSensePin(int8_t pin) {
+  _usbSensePin = pin;
+  // Mux ST is level-shifted by an external divider on V0.4 — plain INPUT,
+  // no internal pull (same as begin()).
+  if (_usbSensePin >= 0) pinMode(_usbSensePin, INPUT);
+}
+
+void MistMaker::setBatteryPin(int8_t pin) {
+  _battPin = pin;
+  // A newly selected (or re-enabled) ADC source must be classified fresh;
+  // otherwise LOW/CRITICAL hysteresis from the previous source can leak into
+  // the first reading from this pin.
+  _battState = MIST_BATT_UNKNOWN;
+  if (_battPin >= 0) pinMode(_battPin, INPUT);
+}
+
 void MistMaker::setBatteryThresholds(float lowV, float criticalV) {
   _battLowV  = lowV;
   _battCritV = criticalV;

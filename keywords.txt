@@ -34,9 +34,14 @@ probe	KEYWORD2
 discPresent	KEYWORD2
 senseState	KEYWORD2
 lastProbeMa	KEYWORD2
+setButtonPin	KEYWORD2
+disableButton	KEYWORD2
+buttonPin	KEYWORD2
+buttonPressed	KEYWORD2
 setUsbSensePin	KEYWORD2
 usbPresent	KEYWORD2
 onBattery	KEYWORD2
+setBatteryPin	KEYWORD2
 disableBattery	KEYWORD2
 setBatteryDivider	KEYWORD2
 setBatteryThresholds	KEYWORD2

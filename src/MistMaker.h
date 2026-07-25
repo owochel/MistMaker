@@ -5,7 +5,7 @@
 
 // Library version — keep in lockstep with library.properties. Sketches can
 // print it in banners/test reports: Serial.println(MISTMAKER_VERSION);
-#define MISTMAKER_VERSION "2.2.0"
+#define MISTMAKER_VERSION "2.3.0"
 
 // ===========================================================================
 // MistMaker — Arduino library for the Programmable Mist Maker (OSHWA US002742)
@@ -15,7 +15,11 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
-// v2.2   Examples curated to four (Blink, Ramp, WaterDetect, PhoneDemo),
+// v2.3   Bare constructor accepts optional button/battery/usbSense pins;
+//        runtime setButtonPin/disableButton/setBatteryPin; buttonPressed()
+//        / buttonPin() helpers (raw level, no debounce). Four-pin calls remain
+//        compatible; bare-pin PWM calls must migrate to MistMakerPins.
+// v2.2   Examples curated to four (Blink, Breath, WaterDetect, PhoneDemo),
 //        all runnable as-is on the two boards in the shop. No API changes.
 // v2.1   Battery Kit V0.4.1 (July 2026 production run): new preset
 //        MistMakerBatteryKitV041() — same pin map as V0.4, the spin changed
@@ -102,7 +106,7 @@ struct MistMakerPins {
   int8_t boostEn;  // TPS61023 boost enable, HIGH = 5V rail on (-1 = none/always on)
   int8_t sense;    // current-sense ADC input (-1 = none)
   int8_t led;      // status LED (-1 = none)
-  int8_t button;   // user button (-1 = none) — read it yourself, kept for reference
+  int8_t button;   // user button (-1 = none) — use buttonPressed() after begin()
   int8_t battery;  // battery-voltage ADC via divider (-1 = none)
   int8_t usbSense; // power-mux status (TPS2116 ST): HIGH=USB, LOW=cell (-1 = none)
 };
@@ -185,8 +189,11 @@ public:
             uint8_t  pwmRes  = MistMakerDefaults::PWM_RES_BITS,
             int      dutyMax = MistMakerDefaults::DUTY_AUTO);
 
-  // Bare-pins constructor for breadboards / custom wiring (v1.0 signature).
+  // Bare-pins constructor for breadboards / custom wiring. Optional trailing
+  // pins (button / battery / usbSense) default to -1 = feature off. Old
+  // 4-arg call sites stay source-compatible.
   MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
+            int buttonPin = -1, int battPin = -1, int usbSensePin = -1,
             uint32_t pwmFreq = MistMakerDefaults::PWM_FREQ_HZ,
             uint8_t  pwmRes  = MistMakerDefaults::PWM_RES_BITS,
             int      dutyMax = MistMakerDefaults::DUTY_AUTO);
@@ -241,6 +248,14 @@ public:
   MistSenseState senseState() const { return _senseState; }
   float lastProbeMa() const { return _lastProbeMa; }
 
+  // ------------------- button -------------------
+  // PCB button is active-HIGH (external pull-down). No debounce — raw level.
+  void setButtonPin(int8_t pin);
+  void disableButton() { _buttonPin = -1; }
+  int8_t buttonPin() const { return _buttonPin; }
+  // true while the button is held; false if no button pin is configured.
+  bool buttonPressed() const;
+
   // ------------------- power source (mux status, V0.4+) -------------------
   // The TPS2116 power mux picks USB (VIN1) over the cell (VIN2) whenever USB is
   // present, so the battery is the *source* only when USB is unplugged. Its ST
@@ -248,7 +263,7 @@ public:
   // V0.4 = D8) and battery monitoring gates itself on it, never mistaking
   // "charging on USB" for "dying on the cell". Presets set this; set it by hand
   // for a custom board.
-  void setUsbSensePin(int8_t pin) { _usbSensePin = pin; }
+  void setUsbSensePin(int8_t pin);
   // true when the load runs from USB (mux on VIN1). With no ST/USB-sense pin
   // configured this is ALWAYS true (fail safe: a board that can't sense its
   // source must never blind-auto-shut-down). Consequence: onBattery() is always
@@ -260,15 +275,21 @@ public:
   bool onBattery() { return !usbPresent(); }
 
   // ------------------- battery (needs a battery pin) -------------------
-  // Turn battery sensing OFF at runtime — the pre-V0.4 escape hatch. Where the
-  // mux status isn't wired to a GPIO (Battery Kit V0.3), the D1 divider can't
-  // tell USB-C power from a real cell, so the reading is unreliable and caused
-  // false low-battery shutdowns. After this call every battery_* method behaves
-  // as on a board with no cell: readBatteryVolts()/percent() return 0 and
-  // batteryState() returns MIST_BATT_UNKNOWN. On V0.4 prefer wiring ST instead
-  // (setUsbSensePin / the V0.4 preset) — then batteryState() self-gates and you
-  // keep real monitoring while on the cell.
-  void disableBattery() { _battPin = -1; }
+  // Enable/disable battery sensing at runtime. disableBattery() is the
+  // pre-V0.4 escape hatch: where the mux status isn't wired to a GPIO
+  // (Battery Kit V0.3), the D1 divider can't tell USB-C power from a real
+  // cell, so the reading is unreliable and caused false low-battery
+  // shutdowns. After disableBattery() every battery_* method behaves as on a
+  // board with no cell: readBatteryVolts()/percent() return 0 and
+  // batteryState() returns MIST_BATT_UNKNOWN. setBatteryPin() turns sensing
+  // back on (e.g. V0.3 experiments with USB unplugged). On V0.4 prefer
+  // wiring ST instead (setUsbSensePin / the V0.4 preset) — then
+  // batteryState() self-gates and you keep real monitoring while on the cell.
+  void setBatteryPin(int8_t pin);
+  void disableBattery() {
+    _battPin = -1;
+    _battState = MIST_BATT_UNKNOWN;
+  }
   // Divider ratio = (Rtop+Rbottom)/Rbottom. Battery Kits use 2.0 (10k/10k).
   void setBatteryDivider(float ratio) { _battDivider = ratio; }
   // Thresholds in volts under load (defaults in MistMakerDefaults).

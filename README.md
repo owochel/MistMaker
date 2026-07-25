@@ -18,6 +18,22 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
 - Modular and reusable class-based structure
 
+> **New in v2.3:** bare constructor accepts optional `button` / `battery` /
+> `usbSense` pins; runtime `setButtonPin()` / `disableButton()` /
+> `setBatteryPin()`; and `buttonPressed()` / `buttonPin()` helpers (raw
+> active-HIGH level, no debounce). Existing four-pin sketches compile
+> unchanged.
+>
+> If a sketch used the old bare-pin constructor's optional PWM arguments in
+> positions 5–7, migrate it to the `MistMakerPins` constructor before upgrading:
+>
+> ```cpp
+> MistMakerPins pins{mistPin, enPin, sensePin, ledPin, -1, -1, -1};
+> MistMaker mist(pins, pwmFreq, pwmRes, dutyMax);
+> ```
+>
+> In v2.3 those positions configure `button`, `battery`, and `usbSense`.
+
 > **New in v2.1:** `MistMakerBatteryKitV041()` preset for the July 2026
 > production board (same pins as V0.4 — the spin changed passives only), the
 > `MISTMAKER_VERSION` string for banners/test reports, and `keywords.txt`
@@ -69,10 +85,13 @@ void setup() {
 void loop() {}
 ```
 
-Custom wiring? Use the pin constructor (unchanged since v1.0):
+Custom wiring? Use the pin constructor — optional trailing pins default to
+`-1` (feature off); old 4-arg call sites still work:
 
 ```cpp
 MistMaker mist(mistPin, enPin, sensePin, ledPin);
+// MistMaker mist(mistPin, enPin, sensePin, ledPin, buttonPin);
+// MistMaker mist(mistPin, enPin, sensePin, ledPin, buttonPin, battPin, usbSensePin);
 ```
 
 ---
@@ -165,17 +184,39 @@ calibrated `analogReadMilliVolts()` (linear even on the C6).
 >   cell). `disableBattery()` remains for switching it off at runtime on
 >   custom builds.
 
+For custom wiring, pass the optional pins after the four required pins:
+
+```cpp
+MistMaker mist(mistPin, enPin, sensePin, ledPin,
+               buttonPin, batteryPin, usbSensePin);
+```
+
+Use `-1` for an unavailable optional pin. For example, battery and power-source
+sensing without a button is:
+
+```cpp
+MistMaker mist(mistPin, enPin, sensePin, ledPin,
+               -1, batteryPin, usbSensePin);
+```
+
+See `BatteryPowerTest` for a Serial Monitor test that reports USB versus
+battery power, measured voltage, estimated charge percentage, and battery
+state.
+
 ---
 
 ## 📚 Examples
 
-Four examples, in the order to try them — each runs as-is on the Battery Kit
-and the Extension Kit:
+Seven examples are included. Hardware-specific examples identify the required
+board in their comments:
 
 | Example | What it shows |
 |---|---|
 | `Blink` | Hello-world: mist 6 s on / 3 s off, LED follows |
 | `Breath` | Mist that breathes — smooth fade in, hold, fade out with `setLevel()` |
+| `ButtonPressToMist` | Hold the Battery Kit button to mist; release it to stop |
+| `ButtonOn-Off` | Debounced press-on/press-off toggle using `buttonPressed()` |
+| `BatteryPowerTest` | Report USB/cell source, battery voltage, percent, and state on V0.4/V0.4.1 |
 | `WaterDetect` | Self-minding mist: stops when water runs out or the disc comes off, resumes by itself; `'c'` auto-calibrates |
 | `PhoneDemo` | Drive the mist from a phone's mic/light/motion/face/music via a Cloudflare relay; sync many makers ([extras/phone-app](extras/phone-app)) |
 
@@ -241,7 +282,8 @@ probe/calibration timing constants sit at the top of `MistMaker.cpp`.
 MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
           uint8_t pwmRes = 8,
           int dutyMax = MistMakerDefaults::DUTY_AUTO); // AUTO = 50% efficiency knee
-MistMaker(int mistPin, int enPin, int sensePin, int ledPin, ...); // bare pins
+MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
+          int buttonPin = -1, int battPin = -1, int usbSensePin = -1, ...);
 
 // --- control ---
 void begin();
@@ -261,6 +303,11 @@ bool  discPresent();
 MistSenseState senseState();
 float lastProbeMa();
 
+// --- button ---
+void    setButtonPin(int8_t pin);  void disableButton();
+int8_t  buttonPin();             // configured pin, or -1
+bool    buttonPressed();         // active-HIGH (PCB pull-down); raw, no debounce
+
 // --- power source (mux status, V0.4+) ---
 void    setUsbSensePin(int8_t pin);                // TPS2116 ST (Battery Kit V0.4+ = D8)
 bool    usbPresent();            // load on USB (mux VIN1)? true if no sense pin
@@ -273,6 +320,7 @@ MistBatteryState batteryState(); // OK/LOW/CRITICAL/CHARGING, ST-gated + hystere
 bool    batteryLow();   bool batteryCritical();
 void    setBatteryDivider(float ratio);            // default 2.0
 void    setBatteryThresholds(float lowV, float critV);
+void    setBatteryPin(int8_t pin); // enable / re-enable sensing
 void    disableBattery();        // pre-V0.4 escape hatch (turns sensing off)
 void    shutdown();              // mist + boost + LED off (call before sleep)
 ```
