@@ -207,6 +207,7 @@ h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; mar
 
 .devs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .devs .empty { color: var(--ink-soft); font-size: .88rem; text-align: center; padding: 14px 0; }
+.addmaker { margin-top: 14px; }      /* "➕ Add a maker by its words" button */
 .dev { background: #fff; border-radius: 14px; padding: 12px 14px; box-shadow: 0 3px 9px rgb(12 74 97 / .1); }
 .dev-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .dev-name { font-weight: 700; font-size: .92rem; }
