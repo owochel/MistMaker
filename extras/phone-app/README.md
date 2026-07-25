@@ -87,33 +87,40 @@ rate lives in `SEND_HZ` at the top of `public/app.js` if you ever want to tune i
 
 ## Part B — flash the makers (`examples/PhoneDemo`)
 
-Each mist maker runs the **same** sketch. Flash it once per board.
+Each mist maker runs the **same** sketch — no per-board code edits. Flash it once
+per board, then set WiFi + room **on the device** (no hardcoded passwords).
 
-1. In Arduino IDE, install the library **"WebSockets" by Markus Sattler**
-   (Library Manager) — plus MistMaker, as usual.
-2. Open `examples/PhoneDemo/PhoneDemo.ino`.
-3. Fill in the four lines near the top:
-   ```cpp
-   const char* WIFI_SSID  = "your-wifi";
-   const char* WIFI_PASS  = "your-password";
-   const char* RELAY_HOST = "mistmaker-relay.YOURNAME.workers.dev"; // from Part A
-   const char* ROOM       = "workshop";   // any phone in this room controls this maker
-   ```
-4. Select **XIAO_ESP32C6**, upload. Repeat for each board (no changes needed —
-   each names itself `Mist-XXXX` from its MAC address).
+1. In Arduino IDE, install the libraries **"WebSockets" by Markus Sattler** and
+   **"ArduinoJson" by Benoit Blanchon** (Library Manager) — plus MistMaker, as usual.
+2. Open `examples/PhoneDemo/PhoneDemo.ino`. Only edit the top if you deployed
+   your own relay: set `RELAY_HOST` to your host (defaults to the hosted one).
+3. Select **XIAO_ESP32C6** and upload. Repeat for each board — that's it.
+4. **First-boot WiFi setup** (per board, once): the board makes its own WiFi
+   `MistMaker-Setup-XXXX`. Join it — the setup page pops up (else open
+   `http://192.168.4.1`). There you can tap **Test mist (30%)** to check the
+   hardware, name the maker, set the **Room** (below), then pick the venue WiFi +
+   password and **Save**. The board reboots and connects. To redo setup later,
+   hold the button while powering on.
 
-> **Flash tip:** this sketch uses ~89% of the default flash partition. If you add
+> **Rooms / privacy:** every board defaults to its **own unique two-word room**
+> (e.g. `fluffy-otter`, shown on the setup page and on Serial), so a fresh board
+> is private. For a **group show**, set every board's Room to one shared name like
+> `workshop` and set the same room in the app's ☁ chip — or pull a private board
+> into your room with the app's **➕ Add a maker by its words**.
+
+> **Button:** press the board button any time — setup or connected, online or
+> offline — to toggle a local 30% mist. Hold it at power-on to re-run WiFi setup.
+
+> **Flash tip:** this sketch uses ~93% of the default flash partition. If you add
 > to it and it no longer fits, set **Tools → Partition Scheme → "Huge APP (3MB)"**.
 
 **Debugging a board:** open Serial Monitor at **115200**. Each board prints its
 name, WiFi + relay status, every mist level change, and a status line each second:
 ```
-==============================
-  Mist-A4F1  (room: workshop)
-  relay: mistmaker-relay.YOURNAME.workers.dev
-==============================
-[WiFi] joining "your-wifi"... ok — ip 192.168.1.42, rssi -54 dBm
-[WS] connected — open the app on your phone to control me
+==== Fluffy Otter  (id: A4F1, room: workshop, relay: mistcontrol.byproductlab.com) ====
+[ID] this board is private room "fluffy-otter" — set room to a shared name like "workshop" for a group
+[WiFi] joining "venue-wifi"... ok — ip 192.168.1.42, rssi -54 dBm
+[WS] connected — control me from the app
 [CMD] mist level -> 30%
 [STAT] level=30%  current=148 mA  water=ok  wifi=relay-ok(-54 dBm)
 ```
@@ -144,6 +151,9 @@ Open your Worker URL on a phone, then:
   - **Together** — all in sync.
   - **Wave** — a ripple/delay across them (use *spread*) — an animation.
   - **Spectrum** — one audio band per maker (great with Music mode).
+- **➕ Add a maker by its words** — type the two words printed on a maker
+  (its private room, e.g. `fluffy-otter`) and it hops into your current room
+  over the air — no reset, no cable.
 
 ### Sensor permission notes
 - **iPhone**: the first tap on Mic / Light / Face / Tilt shows a permission prompt

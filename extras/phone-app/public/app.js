@@ -135,7 +135,7 @@ function renderTargets() {
 }
 function renderDevs() {
   devCount.textContent = makers.length;
-  if (!makers.length) { devsEl.innerHTML = '<li class="empty">No makers yet — flash one &amp; power it on ☁</li>'; return; }
+  if (!makers.length) { devsEl.innerHTML = `<li class="empty">No makers in &ldquo;${esc(room)}&rdquo; yet. Power one on, or tap <b>➕ Add a maker</b> below to bring one in by its two words ☁</li>`; return; }
   devsEl.innerHTML = makers.map(d => {
     const lvl = clamp(+d.level || 0);
     const w = d.water === "ok" ? '<span class="badge ok">water ok</span>'
@@ -418,6 +418,59 @@ $("roomSave").onclick = (e) => {
   const u = new URL(location); u.searchParams.set("room", v); history.replaceState(0, "", u);
   connect();                                          // connect() cleanly drops the old socket + timer
 };
+
+// ── add / claim a maker into THIS room by its printed two words ──
+// We briefly join the board's private room (its words), then send a keyed
+// {t:"room"} command telling it to hop into our current room. No reset/cable.
+const addDlg = $("addDlg"), addInput = $("addInput"), addStatus = $("addStatus");
+const normalizeRoom = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, "-");
+function setAddStatus(msg, ok) {        // ok: true | false | null (in progress)
+  addStatus.innerHTML = (ok === false ? "⚠ " : ok === true ? "✓ " : "") + msg;
+  addStatus.style.color = ok === false ? "#a23b3b" : ok === true ? "#1f7a4d" : "var(--ink-soft)";
+}
+function openAdd() {
+  if (addDlg && typeof addDlg.showModal === "function") {
+    addInput.value = ""; setAddStatus("", null); addDlg.showModal(); setTimeout(() => addInput.focus(), 50);
+  } else {
+    const w = prompt("Type the two words printed on the maker (e.g. fluffy-otter) to bring it into this room:");
+    if (w) addMaker(w);
+  }
+}
+let addAbort = null;                                   // closes an in-flight Add probe (Cancel / retry)
+function addMaker(words) {
+  if (addAbort) addAbort();                            // abort any previous in-flight attempt
+  const board = normalizeRoom(words);
+  if (!board) return;
+  const dest = room;                                   // bring it into the room I'm in right now
+  if (board === dest) return setAddStatus("That's already this room — type a maker's own two words.", false);
+  setAddStatus(`Looking for &ldquo;${esc(board)}&rdquo;…`, null);
+  let probe, done = false, sent = 0;
+  const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?room=${encodeURIComponent(board)}&role=phone&name=Adder`;
+  try { probe = new WebSocket(url); } catch { return setAddStatus("Couldn't reach the relay. Try again.", false); }
+  const finish = (msg, ok) => {
+    if (done) return; done = true; clearTimeout(to); addAbort = null; try { probe.close(); } catch {}
+    setAddStatus(msg, ok);
+    if (ok) setTimeout(() => { if (addDlg && addDlg.open) addDlg.close(); }, 1600);
+  };
+  const to = setTimeout(() => finish(`No maker &ldquo;${esc(board)}&rdquo; answered. Check the two words (printed on it) and that it's powered on.`, false), 7000);
+  addAbort = () => { if (done) return; done = true; clearTimeout(to); addAbort = null; try { probe.close(); } catch {} };  // silent cancel
+  probe.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.t === "roster") {
+      if (sent) return;                                 // send the move once
+      const devs = (m.devices || []).filter((d, i, a) => a.findIndex(x => x.id === d.id) === i);
+      if (!devs.length) return;                         // board not joined yet — wait until timeout
+      devs.forEach(d => probe.send(JSON.stringify({ t: "room", id: d.id, key: board, room: dest })));
+      sent = devs.length;
+      setTimeout(() => finish(`Moved ${sent} maker${sent > 1 ? "s" : ""} into &ldquo;${esc(dest)}&rdquo; — appearing below ☁`, true), 800);
+    }
+  };
+  probe.onerror = () => finish("Couldn't reach the relay. Try again.", false);
+}
+$("addBtn").onclick = openAdd;
+$("addGo").onclick = () => addMaker(addInput.value);
+$("addCancel").onclick = () => { if (addAbort) addAbort(); if (addDlg && addDlg.open) addDlg.close(); };
+addInput.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addMaker(addInput.value); } };
 
 function setFill(el) { el.style.setProperty("--fill", ((el.value - el.min) / (el.max - el.min) * 100) + "%"); }
 
