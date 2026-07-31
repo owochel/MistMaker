@@ -177,7 +177,7 @@ inline MistMakerPins MistMakerLegacyV1() {
 //   VBAT      (D1 pad) -> A0    CURR SENSE (D2 pad) -> A1
 //   ST        (D8 pad) -> A2    GND <-> GND
 //
-// Full wiring guide with power options: docs/lab-jumper-wire-mist.md
+// Full wiring guide: https://docs.byproductlab.com/labs/making-mist-with-an-arduino/
 
 // Extension Kit V0.1 over jumpers: PWM + current sense only (needs 5V + GND,
 // plus 3.3V on the kit's 3V3 pad to power the sense amp).
