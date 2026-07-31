@@ -5,7 +5,7 @@
 
 // Library version — keep in lockstep with library.properties. Sketches can
 // print it in banners/test reports: Serial.println(MISTMAKER_VERSION);
-#define MISTMAKER_VERSION "2.4.0"
+#define MISTMAKER_VERSION "2.5.0"
 
 // ===========================================================================
 // MistMaker — Arduino library for the Programmable Mist Maker (OSHWA US002742)
@@ -15,6 +15,12 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
+// v2.5   Runs on Arduino Uno R3, Uno R4, and Nano 33 IoT (jumper-wired to
+//        the kits) alongside XIAO ESP32 — per-chip timer code lives in
+//        src/boards/. Same API, same 0..255 levels everywhere. begin() now
+//        returns false (with a Serial hint) on a pin that can't make
+//        108.7 kHz, and MISTMAKER_ASSERT_MIST_PIN(pin) catches that at
+//        compile time. New JumperWireQuickStart example + docs lab guide.
 // v2.4   PhoneDemo restores the WiFi setup portal and local button control,
 //        adds private two-word rooms, and lets the phone app move makers
 //        between rooms over the air. No core API changes.
