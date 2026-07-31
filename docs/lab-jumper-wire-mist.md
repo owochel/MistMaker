@@ -167,6 +167,12 @@ library catching a pin that can't make 108.7 kHz. Move the mist wire and the
 needs to sit in water, and low water is exactly what the water-detection
 variation below is for.
 
+**Current reads 0 mA / WaterDetect says "no disc found" with a disc right
+there.** The kit's sense amplifier has no power. In USB mode it's fed by the
+orange 3.3V wire (Arduino 3.3V → kit 3V3 pad) — without it every current
+reading is zero. Add the wire; on battery mode the kit powers the amplifier
+itself.
+
 ## Variation: Run on Battery
 
 The kit powers itself from its own cell — then the Arduino only supplies

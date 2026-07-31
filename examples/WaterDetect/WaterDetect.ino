@@ -11,8 +11,10 @@
 // measured current and what the board concluded from it.
 //
 // Boards: a Seeed XIAO ESP32 in the kit's socket, or an Arduino Uno R3/R4
-// or Nano 33 IoT on jumper wires (wiring: examples/JumperWireQuickStart —
-// current sense needs the two optional wires).
+// or Nano 33 IoT on jumper wires (wiring: examples/JumperWireQuickStart).
+// On jumpers, current sense needs two extra wires: A1 -> kit D2 pad, and
+// 3.3V -> kit 3V3 pad (in USB mode the sense amp is unpowered without it —
+// every reading is 0 mA and this sketch reports "no disc found").
 
 #include <MistMaker.h>
 
