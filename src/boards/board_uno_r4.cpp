@@ -20,7 +20,12 @@ uint16_t pwmInit(int8_t pin, uint32_t freqHz, uint8_t resBits) {
   const uint32_t clockHz = R_FSP_SystemClockHzGet(FSP_PRIV_CLOCK_PCLKD);
   const uint32_t period = (clockHz + freqHz / 2) / freqHz;  // 442 counts at 48 MHz
   if (period < 2 || period > 0xFFFF) return 0;
-  if (pwm) { pwm->end(); delete pwm; pwm = nullptr; }  // clean re-begin
+  if (pwm) {  // clean re-begin: park the output low before tearing down
+    pwm->pulseWidth_raw(0);
+    pwm->end();
+    delete pwm;
+    pwm = nullptr;
+  }
   pwm = new PwmOut(pin);
   // raw = true: period/pulse are direct timer counts at PCLKD / 1.
   if (!pwm->begin(period, 0, true, TIMER_SOURCE_DIV_1)) {

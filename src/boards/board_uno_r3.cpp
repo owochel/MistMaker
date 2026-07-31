@@ -21,9 +21,12 @@ uint16_t pwmInit(int8_t pin, uint32_t freqHz, uint8_t resBits) {
   digitalWrite(pin, LOW);
   const uint8_t saved = SREG;
   cli();
-  // Fast PWM, ICR1 = top (mode 14), prescaler 1. The pin stays disconnected
-  // from the timer until the first nonzero duty write.
-  TCCR1A = (TCCR1A & (_BV(COM1A1) | _BV(COM1B1))) | _BV(WGM11);
+  // Fast PWM, ICR1 = top (mode 14), prescaler 1. This pin's compare output
+  // stays disconnected until the first nonzero duty write (a stale COM bit
+  // from earlier analogWrite would spike at OCR=0); the other channel's COM
+  // bit is preserved for a second instance on the sibling pin.
+  const uint8_t myCom = (pin == 9) ? _BV(COM1A1) : _BV(COM1B1);
+  TCCR1A = (TCCR1A & (_BV(COM1A1) | _BV(COM1B1)) & ~myCom) | _BV(WGM11);
   TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS10);
   ICR1 = (uint16_t)top;
   if (pin == 9) OCR1A = 0; else OCR1B = 0;

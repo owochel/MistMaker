@@ -61,7 +61,8 @@ MistMaker::MistMaker(const MistMakerPins &p,
               pwmFreq, pwmRes, dutyMax) {}
 
 uint16_t MistMaker::resolveDutyCap(int requested) const {
-  const uint16_t fullScale = (uint16_t)((1u << _pwmRes) - 1u);
+  // 1UL: at pwmRes 16 a 16-bit shift would overflow on AVR.
+  const uint16_t fullScale = (uint16_t)((1UL << _pwmRes) - 1UL);
   // ~90% of full scale is the physical ceiling: above it the resonant
   // ring-back has no time to swing, so the drive makes heat, not mist
   // (bench sweep, 2026-07-03). Requests beyond it clamp to the ceiling.
@@ -106,7 +107,7 @@ void MistMaker::applyDuty(uint16_t duty) {
   if (_hwTop == 0) return;  // begin() not run, or the mist pin was rejected
   // Logical 0..fullScale -> hardware 0..top, rounding half-up. On boards whose
   // timer top equals the logical full scale this is an exact identity.
-  const uint16_t fullScale = (uint16_t)((1u << _pwmRes) - 1u);
+  const uint16_t fullScale = (uint16_t)((1UL << _pwmRes) - 1UL);
   uint32_t hw = ((uint32_t)duty * _hwTop + fullScale / 2u) / fullScale;
   if (duty > 0 && hw == 0) hw = 1;
   MistMakerBoard::pwmWrite(_mistPin, (uint16_t)hw);

@@ -36,6 +36,9 @@ uint16_t pwmInit(int8_t pin, uint32_t freqHz, uint8_t resBits) {
       GCLK_CLKCTRL_ID(tccNum == 2 ? GCM_TCC2_TC3 : GCM_TCC0_TCC1));
   while (GCLK->STATUS.bit.SYNCBUSY) {}
   tcc->CTRLA.bit.ENABLE = 0;              syncTCC(tcc);
+  // Pin the prescaler to DIV1 — the period math assumes an undivided 48 MHz.
+  tcc->CTRLA.reg = (tcc->CTRLA.reg & ~TCC_CTRLA_PRESCALER_Msk) |
+                   TCC_CTRLA_PRESCALER_DIV1;
   tcc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;  syncTCC(tcc);
   tcc->PER.reg = top;                     syncTCC(tcc);
   tcc->CC[ch].reg = 0;                    syncTCC(tcc);
