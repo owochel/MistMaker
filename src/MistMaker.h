@@ -5,7 +5,7 @@
 
 // Library version — keep in lockstep with library.properties. Sketches can
 // print it in banners/test reports: Serial.println(MISTMAKER_VERSION);
-#define MISTMAKER_VERSION "2.4.0"
+#define MISTMAKER_VERSION "2.5.0"
 
 // ===========================================================================
 // MistMaker — Arduino library for the Programmable Mist Maker (OSHWA US002742)
@@ -15,6 +15,12 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
+// v2.5   Runs on Arduino Uno R3, Uno R4, Nano 33 IoT, and Nano 33 BLE
+//        (jumper-wired to the kits) alongside XIAO ESP32 — per-chip timer code lives in
+//        src/boards/. Same API, same 0..255 levels everywhere. begin() now
+//        returns false (with a Serial hint) on a pin that can't make
+//        108.7 kHz, and MISTMAKER_ASSERT_MIST_PIN(pin) catches that at
+//        compile time. New JumperWireQuickStart example + docs lab guide.
 // v2.4   PhoneDemo restores the WiFi setup portal and local button control,
 //        adds private two-word rooms, and lets the phone app move makers
 //        between rooms over the air. No core API changes.
@@ -160,7 +166,57 @@ inline MistMakerPins MistMakerBlockKitV01() {
 inline MistMakerPins MistMakerLegacyV1() {
   return MistMakerPins{ D1, D3, D2, D7, D6, -1, -1 };
 }
+
+#elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_SAMD) || \
+      defined(ARDUINO_ARCH_RENESAS_UNO) || defined(ARDUINO_ARCH_NRF52840)
+// Jumper-wire presets for Arduino Uno (R3/R4), Nano 33 IoT, and Nano 33 BLE —
+// same wiring on all of them. Kit pad -> Arduino pin:
+//
+//   MIST_PWM  (D0 pad) -> 9     BOOST EN (D3 pad) -> 7
+//   BUTTON    (D6 pad) -> 2     KIT LED  (D7 pad) -> 4
+//   VBAT      (D1 pad) -> A0    CURR SENSE (D2 pad) -> A1
+//   ST        (D8 pad) -> A2    GND <-> GND
+//
+// Full wiring guide with power options: docs/lab-jumper-wire-mist.md
+
+// Extension Kit V0.1 over jumpers: PWM + current sense only (needs 5V + GND,
+// plus 3.3V on the kit's 3V3 pad to power the sense amp).
+inline MistMakerPins MistMakerExtensionV01() {
+  return MistMakerPins{ 9, -1, A1, -1, -1, -1, -1 };
+}
+
+// Battery Kit V0.4 / V0.4.1 over jumpers into the empty XIAO socket.
+inline MistMakerPins MistMakerBatteryKitV04() {
+  return MistMakerPins{ 9, 7, A1, 4, 2, A0, A2 };
+}
+
+inline MistMakerPins MistMakerBatteryKitV041() {
+  return MistMakerBatteryKitV04();
+}
 #endif
+
+// ---------------------------------------------------------------------------
+// Compile-time mist-pin check. The mist pin must sit on a timer that can make
+// 108.7 kHz — most pins can't, and a wrong pin means zero mist. Put
+// MISTMAKER_ASSERT_MIST_PIN(pin) next to your pin choice and a bad pin stops
+// the compile with the fix in the message. begin() re-checks at runtime.
+// ---------------------------------------------------------------------------
+constexpr bool mistMakerValidMistPin(int pin) {
+#if defined(ARDUINO_ARCH_AVR)
+  return pin == 9 || pin == 10;                       // 16-bit Timer1 outputs
+#elif defined(ARDUINO_SAMD_NANO_33_IOT)
+  return pin == 5 || pin == 6 || pin == 9 || pin == 10 || pin == 11;
+#elif defined(ARDUINO_ARCH_RENESAS_UNO)
+  return pin == 3 || pin == 5 || pin == 6 || pin == 9 || pin == 10 || pin == 11;
+#else
+  return pin >= 0;   // Nano 33 BLE routes PWM to any pin; begin() checks the rest
+#endif
+}
+
+#define MISTMAKER_ASSERT_MIST_PIN(pin) \
+  static_assert(mistMakerValidMistPin(pin), \
+    "MistMaker: this pin can't make the mist signal. Uno R3: 9 or 10. " \
+    "Nano 33 IoT: 5/6/9/10/11. Uno R4: 3/5/6/9/10/11. Nano 33 BLE: any pin.")
 
 // ---------------------------------------------------------------------------
 // Classifier results
@@ -201,7 +257,10 @@ public:
             uint8_t  pwmRes  = MistMakerDefaults::PWM_RES_BITS,
             int      dutyMax = MistMakerDefaults::DUTY_AUTO);
 
-  void begin();
+  // Returns false if the mist pin can't make the 108.7 kHz signal on this
+  // board (a message with the valid pins prints to Serial). Callers that
+  // ignore the return keep working as before.
+  bool begin();
 
   // ------------------- basic control -------------------
   void turnOn();              // full power (= dutyMax)
@@ -323,6 +382,7 @@ private:
   uint32_t _pwmFreq;
   uint8_t _pwmRes;
   uint16_t _dutyMax;
+  uint16_t _hwTop;   // hardware duty for 100% (from the board layer; 0 = PWM not running)
   uint8_t _level;
   bool _state;
   unsigned long _startTime;

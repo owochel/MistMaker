@@ -26,6 +26,8 @@ concurrency:
   group: compile-examples-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# ESP32 rows compile every example (PhoneDemo needs WiFi + WebSockets).
+# The Arduino rows compile everything except PhoneDemo.
 jobs:
   compile:
     name: ${{ matrix.board }}
@@ -37,22 +39,110 @@ jobs:
         include:
           - board: XIAO ESP32-C6
             fqbn: esp32:esp32:XIAO_ESP32C6
+            platforms: |
+              - name: esp32:esp32
+                version: 3.3.10
+                source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+            libraries: |
+              - source-path: ./        # this library
+              - name: WebSockets       # PhoneDemo example (Markus Sattler)
+              - name: ArduinoJson      # PhoneDemo example (command parsing)
+            sketch-paths: |
+              - examples
           - board: XIAO ESP32-S3
             fqbn: esp32:esp32:XIAO_ESP32S3
+            platforms: |
+              - name: esp32:esp32
+                version: 3.3.10
+                source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+            libraries: |
+              - source-path: ./
+              - name: WebSockets
+              - name: ArduinoJson
+            sketch-paths: |
+              - examples
+          - board: Arduino Uno R3
+            fqbn: arduino:avr:uno
+            platforms: |
+              - name: arduino:avr
+                version: 1.8.8
+            libraries: |
+              - source-path: ./
+            sketch-paths: |
+              - examples/Blink
+              - examples/Breath
+              - examples/ButtonPressToMist
+              - examples/ButtonOn-Off
+              - examples/BatteryPowerTest
+              - examples/WaterDetect
+              - examples/JumperWireQuickStart
+          - board: Arduino Nano 33 IoT
+            fqbn: arduino:samd:nano_33_iot
+            platforms: |
+              - name: arduino:samd
+                version: 1.8.14
+            libraries: |
+              - source-path: ./
+            sketch-paths: |
+              - examples/Blink
+              - examples/Breath
+              - examples/ButtonPressToMist
+              - examples/ButtonOn-Off
+              - examples/BatteryPowerTest
+              - examples/WaterDetect
+              - examples/JumperWireQuickStart
+          - board: Arduino UNO R4 Minima
+            fqbn: arduino:renesas_uno:minima
+            platforms: |
+              - name: arduino:renesas_uno
+                version: 1.6.0
+            libraries: |
+              - source-path: ./
+            sketch-paths: |
+              - examples/Blink
+              - examples/Breath
+              - examples/ButtonPressToMist
+              - examples/ButtonOn-Off
+              - examples/BatteryPowerTest
+              - examples/WaterDetect
+              - examples/JumperWireQuickStart
+          - board: Arduino UNO R4 WiFi
+            fqbn: arduino:renesas_uno:unor4wifi
+            platforms: |
+              - name: arduino:renesas_uno
+                version: 1.6.0
+            libraries: |
+              - source-path: ./
+            sketch-paths: |
+              - examples/Blink
+              - examples/Breath
+              - examples/ButtonPressToMist
+              - examples/ButtonOn-Off
+              - examples/BatteryPowerTest
+              - examples/WaterDetect
+              - examples/JumperWireQuickStart
+          - board: Arduino Nano 33 BLE
+            fqbn: arduino:mbed_nano:nano33ble
+            platforms: |
+              - name: arduino:mbed_nano
+                version: 4.6.0
+            libraries: |
+              - source-path: ./
+            sketch-paths: |
+              - examples/Blink
+              - examples/Breath
+              - examples/ButtonPressToMist
+              - examples/ButtonOn-Off
+              - examples/BatteryPowerTest
+              - examples/WaterDetect
+              - examples/JumperWireQuickStart
     steps:
       - uses: actions/checkout@v4
-      - name: Compile all examples
+      - name: Compile examples
         uses: arduino/compile-sketches@v1
         with:
           fqbn: ${{ matrix.fqbn }}
-          platforms: |
-            - name: esp32:esp32
-              version: 3.3.10
-              source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          libraries: |
-            - source-path: ./        # this library
-            - name: WebSockets       # PhoneDemo example (Markus Sattler)
-            - name: ArduinoJson      # PhoneDemo example (command parsing)
-          sketch-paths: |
-            - examples
+          platforms: ${{ matrix.platforms }}
+          libraries: ${{ matrix.libraries }}
+          sketch-paths: ${{ matrix.sketch-paths }}
           enable-warnings-report: true

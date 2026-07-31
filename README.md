@@ -15,7 +15,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - **Battery monitoring** — calibrated voltage, percent estimate, and a graceful low-battery shutdown to prevent brown-outs
 - **Power-source sensing** — reads the TPS2116 mux status (Battery Kit V0.4+) so battery logic knows USB from the cell and never false-triggers
 - **Pin presets for every official board variant** — one line to target your PCB
-- Designed for ESP32-based boards (tested on Seeed Studio XIAO ESP32-C6)
+- **Runs on five board families** — Seeed XIAO ESP32 (in the kits), and Arduino Uno R3, Uno R4, Nano 33 IoT, and Nano 33 BLE over jumper wires
 - Modular and reusable class-based structure
 
 > **New in v2.4:** `PhoneDemo` restores the first-boot WiFi setup portal and
@@ -213,12 +213,13 @@ state.
 
 ## 📚 Examples
 
-Seven examples are included. Hardware-specific examples identify the required
+Eight examples are included. Hardware-specific examples identify the required
 board in their comments:
 
 | Example | What it shows |
 |---|---|
 | `Blink` | Hello-world: mist 6 s on / 3 s off, LED follows |
+| `JumperWireQuickStart` | First mist from an Arduino Uno / Nano 33 IoT on jumper wires — wiring in the sketch header |
 | `Breath` | Mist that breathes — smooth fade in, hold, fade out with `setLevel()` |
 | `ButtonPressToMist` | Hold the Battery Kit button to mist; release it to stop |
 | `ButtonOn-Off` | Debounced press-on/press-off toggle using `buttonPressed()` |
@@ -236,18 +237,70 @@ All examples are in `File > Examples > MistMaker` after installation.
 
 ## Board Compatibility
 
-This library is designed for **ESP32-based boards** and relies on ESP32's LEDC PWM API (arduino-esp32 **v3.x**) for high-frequency mist control. Tested with:
+The same sketch and the same `setLevel(0..255)` scale work on every supported
+board; the library picks the right timer per chip (`src/boards/`).
 
-- Seeed Studio XIAO ESP32-C6
-- ESP32 DevKit V1
-- ESP32-S3
+| Board | Mist pins | Actual frequency | Duty steps | ADC |
+|---|---|---|---|---|
+| Seeed XIAO ESP32 (C3/C6/S3) | any GPIO (kits use D0) | 108.70 kHz | 256 | 12-bit / 3.3 V |
+| Arduino Uno R3 / classic Nano | **9** or 10 | 108.84 kHz | 147 | 10-bit / 5 V |
+| Arduino Nano 33 IoT | **9**, 5, 6, 10, 11 | 108.60 kHz | 442 | 12-bit / 3.3 V |
+| Arduino Uno R4 (Minima / WiFi) | **9**, 3, 5, 6, 10, 11 | 108.60 kHz | 442 | 14-bit / 5 V |
+| Arduino Nano 33 BLE / BLE Sense | any digital pin (**9**) | 108.84 kHz | 147 | 12-bit / 3.3 V |
 
-❗ This library does **not support AVR-based boards** like Arduino Uno or Mega out of the box.
+Why the pin matters: the disc only mists at its ~108.7 kHz resonance, and only
+pins on a fast hardware timer can make that frequency — a plain `analogWrite()`
+(~490 Hz) makes zero mist. Bold pins are the preset defaults; a wrong pin fails
+at compile time (`MISTMAKER_ASSERT_MIST_PIN`) or at `begin()`, which returns
+false and prints the valid pins. The different step counts only show as
+slightly coarser fades near the visibility threshold — the mist-vs-duty curve
+is broad around the defaults.
 
-If you are using a different board and wish to adapt the library, you may need to:
+**Timer fine print (what the mist signal borrows):**
+- **Uno R3**: Timer1 — the `Servo` library and `analogWrite()` on pins 9/10
+  would break the mist signal. `millis()` and `tone()` are unaffected.
+- **Nano 33 IoT**: TCC0 — don't `analogWrite()` pins 5, 6, 9, 10, A2, A3 while
+  misting (they share the mist timer's period). Pins 4 and 7 (TCC1) and
+  `tone()`/`Servo` are safe.
+- **Uno R4**: pin 9 sits alone on GPT channel 7 — `analogWrite()` elsewhere,
+  `Servo`, and `tone()` are all safe.
+- **Nano 33 BLE**: the mist uses the chip's PWM3 unit — `analogWrite`/`tone`/
+  `Servo` keep working alongside (they use PWM0-2; up to three at once).
+- **XIAO ESP32**: LEDC channels, no conflicts.
 
-- Replace `ledcWrite()` and `ledcAttach()` with board-specific PWM functions — and make sure the carrier stays at **108.7 kHz**, the piezo disc's resonant frequency. A plain `analogWrite()` (~490 Hz/1 kHz on AVR) will NOT make mist; on AVR you must configure a hardware timer (e.g. Timer1 fast PWM with `ICR1 = F_CPU / 108700`) to hit 108.7 kHz
-- Adjust analog read scaling (12-bit vs 10-bit ADC)
+### Arduino Uno / Nano 33 IoT over jumper wires
+
+The Battery Kit's empty XIAO socket takes ordinary male jumper wires — no
+soldering. Minimal USB-mode wiring is 4 wires (5V, GND, mist, boost enable);
+battery mode is 3. Follow the full guide:
+**[Lab: Making Mist With an Arduino](docs/lab-jumper-wire-mist.md)** — wiring
+for all three boards, both power modes, water detection, and troubleshooting.
+
+Quick reference (the `MistMakerBatteryKitV041()` preset on these boards):
+
+| Kit pad | Arduino pin | Wire it when you want |
+|---|---|---|
+| D0 (mist) | 9 | always |
+| D3 (boost enable) | 7 | always |
+| GND | GND | always |
+| 5V-in | 5V | USB mode (skip in battery mode) |
+| 3V3 | 3.3V | water detection (remove in battery mode) |
+| D2 (current sense) | A1 | water detection |
+| D1 (battery voltage) | A0 | battery readouts |
+| D8 (power status) | A2 | USB-vs-cell detection |
+| D6 (button) | 2 | button examples |
+| D7 (kit LED) | 4 | status LED |
+
+Power notes: misting draws 0.3–0.5 A — use a ≥ 1 A USB wall charger or the
+barrel jack, and keep the duty at the default cap on USB power (no
+`DUTY_TURBO`). The Nano 33 IoT and Nano 33 BLE's 5V pins only work after
+bridging their VUSB solder jumpers. On new boards run `autoCalibrateSense()` once — ADC linearity
+differs from the ESP32 the default thresholds were measured on.
+
+Electrical fine print: the kit's gate driver (UCC27511A) tolerates the Uno's
+5 V logic on the mist pad, and the boost enable (TPS61023 EN, 6 V abs max) is
+fine at 5 V. The D8 power-status pad reads ~3.1 V — marginal for 5 V digital
+inputs, which is why the preset reads it on an analog pin.
 
 > ⚠️ **ESP32-C6 ADC note:** do not call `analogReadResolution()` or
 > `analogSetPinAttenuation()` with arduino-esp32 v3.x — it can leave the ADC
@@ -292,7 +345,7 @@ MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
           int buttonPin = -1, int battPin = -1, int usbSensePin = -1, ...);
 
 // --- control ---
-void begin();
+bool begin();                    // false = mist pin can't make 108.7 kHz here
 void turnOn();  void turnOff();  void toggle();  bool isOn();
 void setLevel(uint8_t level);    // 0..255 dimming
 uint8_t getLevel();

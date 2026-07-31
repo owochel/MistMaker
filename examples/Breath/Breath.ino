@@ -6,18 +6,13 @@
 // instead of 0 because mist only becomes visible around there — starting
 // higher keeps the whole breath visible.
 //
-// Works on the Battery Kit and the Extension Kit as wired below.
-// Board: Seeed XIAO ESP32-C6 — pick "XIAO_ESP32C6" in Tools > Board.
+// Boards: a Seeed XIAO ESP32 in the kit's socket, or an Arduino Uno R3/R4
+// or Nano 33 IoT on jumper wires (wiring: examples/JumperWireQuickStart).
 
 #include <MistMaker.h>
 
-// MistMaker pins
-const int MIST_OUTPUT_PIN = D0;
-const int CURRENT_SENSE_PIN = D2;
-const int EN_PIN = D3;
-const int LED_PIN = D7;
-
-MistMaker mist(MIST_OUTPUT_PIN, EN_PIN, CURRENT_SENSE_PIN, LED_PIN);
+// Battery Kit preset. On the Extension Kit use MistMakerExtensionV01().
+MistMaker mist(MistMakerBatteryKitV041());
 
 // The feel of the breath — tweak to taste
 const int MIN_LEVEL    = 60;    // where mist becomes visible
