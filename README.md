@@ -273,8 +273,9 @@ is broad around the defaults.
 The Battery Kit's empty XIAO socket takes ordinary male jumper wires — no
 soldering. Minimal USB-mode wiring is 4 wires (5V, GND, mist, boost enable);
 battery mode is 3. Follow the full guide:
-**[Lab: Making Mist With an Arduino](docs/lab-jumper-wire-mist.md)** — wiring
-for all three boards, both power modes, water detection, and troubleshooting.
+**[Lab: Making Mist With an Arduino](https://docs.byproductlab.com/labs/making-mist-with-an-arduino/)**
+— wiring for every board, both kits, both power modes, water detection, and
+troubleshooting.
 
 Quick reference (the `MistMakerBatteryKitV041()` preset on these boards):
 
@@ -291,11 +292,13 @@ Quick reference (the `MistMakerBatteryKitV041()` preset on these boards):
 | D6 (button) | 2 | button examples |
 | D7 (kit LED) | 4 | status LED |
 
-Power notes: misting draws 0.3–0.5 A — use a ≥ 1 A USB wall charger or the
-barrel jack, and keep the duty at the default cap on USB power (no
-`DUTY_TURBO`). The Nano 33 IoT and Nano 33 BLE's 5V pins only work after
-bridging their VUSB solder jumpers. On new boards run `autoCalibrateSense()` once — ADC linearity
-differs from the ESP32 the default thresholds were measured on.
+Power notes: a laptop USB port is fine at the default mist level (~0.3 A
+total); raising the level with `setMaxDuty()` (turbo ≈ 4× the power) needs a
+≥ 1 A wall charger or the barrel jack. The kit warms up while misting —
+normal, but the inductor gets hot: don't touch it during or right after a
+run. The Nano 33 IoT and Nano 33 BLE's 5V pins only work after bridging
+their VUSB solder jumpers. On new boards run `autoCalibrateSense()` once —
+ADC linearity differs from the ESP32 the default thresholds were measured on.
 
 Electrical fine print: the kit's gate driver (UCC27511A) tolerates the Uno's
 5 V logic on the mist pad, and the boost enable (TPS61023 EN, 6 V abs max) is
