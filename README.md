@@ -15,7 +15,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 - **Battery monitoring** — calibrated voltage, percent estimate, and a graceful low-battery shutdown to prevent brown-outs
 - **Power-source sensing** — reads the TPS2116 mux status (Battery Kit V0.4+) so battery logic knows USB from the cell and never false-triggers
 - **Pin presets for every official board variant** — one line to target your PCB
-- **Runs on four board families** — Seeed XIAO ESP32 (in the kits), and Arduino Uno R3, Uno R4, and Nano 33 IoT over jumper wires
+- **Runs on five board families** — Seeed XIAO ESP32 (in the kits), and Arduino Uno R3, Uno R4, Nano 33 IoT, and Nano 33 BLE over jumper wires
 - Modular and reusable class-based structure
 
 > **New in v2.4:** `PhoneDemo` restores the first-boot WiFi setup portal and
@@ -246,6 +246,7 @@ board; the library picks the right timer per chip (`src/boards/`).
 | Arduino Uno R3 / classic Nano | **9** or 10 | 108.84 kHz | 147 | 10-bit / 5 V |
 | Arduino Nano 33 IoT | **9**, 5, 6, 10, 11 | 108.60 kHz | 442 | 12-bit / 3.3 V |
 | Arduino Uno R4 (Minima / WiFi) | **9**, 3, 5, 6, 10, 11 | 108.60 kHz | 442 | 14-bit / 5 V |
+| Arduino Nano 33 BLE / BLE Sense | any digital pin (**9**) | 108.84 kHz | 147 | 12-bit / 3.3 V |
 
 Why the pin matters: the disc only mists at its ~108.7 kHz resonance, and only
 pins on a fast hardware timer can make that frequency — a plain `analogWrite()`
@@ -263,6 +264,8 @@ is broad around the defaults.
   `tone()`/`Servo` are safe.
 - **Uno R4**: pin 9 sits alone on GPT channel 7 — `analogWrite()` elsewhere,
   `Servo`, and `tone()` are all safe.
+- **Nano 33 BLE**: the mist uses the chip's PWM3 unit — `analogWrite`/`tone`/
+  `Servo` keep working alongside (they use PWM0-2; up to three at once).
 - **XIAO ESP32**: LEDC channels, no conflicts.
 
 ### Arduino Uno / Nano 33 IoT over jumper wires
@@ -290,8 +293,8 @@ Quick reference (the `MistMakerBatteryKitV041()` preset on these boards):
 
 Power notes: misting draws 0.3–0.5 A — use a ≥ 1 A USB wall charger or the
 barrel jack, and keep the duty at the default cap on USB power (no
-`DUTY_TURBO`). The Nano 33 IoT's 5V pin only works after bridging its VUSB
-solder jumper. On new boards run `autoCalibrateSense()` once — ADC linearity
+`DUTY_TURBO`). The Nano 33 IoT and Nano 33 BLE's 5V pins only work after
+bridging their VUSB solder jumpers. On new boards run `autoCalibrateSense()` once — ADC linearity
 differs from the ESP32 the default thresholds were measured on.
 
 Electrical fine print: the kit's gate driver (UCC27511A) tolerates the Uno's

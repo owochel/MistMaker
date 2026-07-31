@@ -16,8 +16,10 @@
 #define MISTMAKER_MIST_PIN_HINT "On Nano 33 IoT use pin 5, 6, 9, 10, or 11."
 #elif defined(ARDUINO_ARCH_RENESAS_UNO)
 #define MISTMAKER_MIST_PIN_HINT "On Uno R4 use pin 3, 5, 6, 9, 10, or 11."
+#elif defined(ARDUINO_ARCH_NRF52840)
+#define MISTMAKER_MIST_PIN_HINT "On Nano 33 BLE any digital pin works (the guides use 9)."
 #else
-#error "MistMaker: this board is not supported. Supported: Seeed XIAO ESP32, Arduino Uno R3/R4, Nano 33 IoT."
+#error "MistMaker: this board is not supported. Supported: Seeed XIAO ESP32, Arduino Uno R3/R4, Nano 33 IoT, Nano 33 BLE."
 #endif
 
 namespace MistMakerBoard {

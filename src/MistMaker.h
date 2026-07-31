@@ -15,8 +15,8 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
-// v2.5   Runs on Arduino Uno R3, Uno R4, and Nano 33 IoT (jumper-wired to
-//        the kits) alongside XIAO ESP32 — per-chip timer code lives in
+// v2.5   Runs on Arduino Uno R3, Uno R4, Nano 33 IoT, and Nano 33 BLE
+//        (jumper-wired to the kits) alongside XIAO ESP32 — per-chip timer code lives in
 //        src/boards/. Same API, same 0..255 levels everywhere. begin() now
 //        returns false (with a Serial hint) on a pin that can't make
 //        108.7 kHz, and MISTMAKER_ASSERT_MIST_PIN(pin) catches that at
@@ -168,9 +168,9 @@ inline MistMakerPins MistMakerLegacyV1() {
 }
 
 #elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_SAMD) || \
-      defined(ARDUINO_ARCH_RENESAS_UNO)
-// Jumper-wire presets for Arduino Uno (R3/R4) and Nano 33 IoT — same wiring
-// on all three boards. Kit pad -> Arduino pin:
+      defined(ARDUINO_ARCH_RENESAS_UNO) || defined(ARDUINO_ARCH_NRF52840)
+// Jumper-wire presets for Arduino Uno (R3/R4), Nano 33 IoT, and Nano 33 BLE —
+// same wiring on all of them. Kit pad -> Arduino pin:
 //
 //   MIST_PWM  (D0 pad) -> 9     BOOST EN (D3 pad) -> 7
 //   BUTTON    (D6 pad) -> 2     KIT LED  (D7 pad) -> 4
@@ -209,14 +209,14 @@ constexpr bool mistMakerValidMistPin(int pin) {
 #elif defined(ARDUINO_ARCH_RENESAS_UNO)
   return pin == 3 || pin == 5 || pin == 6 || pin == 9 || pin == 10 || pin == 11;
 #else
-  return pin >= 0;                                    // begin() checks the rest
+  return pin >= 0;   // Nano 33 BLE routes PWM to any pin; begin() checks the rest
 #endif
 }
 
 #define MISTMAKER_ASSERT_MIST_PIN(pin) \
   static_assert(mistMakerValidMistPin(pin), \
     "MistMaker: this pin can't make the mist signal. Uno R3: 9 or 10. " \
-    "Nano 33 IoT: 5/6/9/10/11. Uno R4: 3/5/6/9/10/11.")
+    "Nano 33 IoT: 5/6/9/10/11. Uno R4: 3/5/6/9/10/11. Nano 33 BLE: any pin.")
 
 // ---------------------------------------------------------------------------
 // Classifier results

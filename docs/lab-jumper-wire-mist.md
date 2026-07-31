@@ -3,7 +3,8 @@
 ## Introduction
 
 In this lab you'll drive a Programmable Mist Maker Battery Kit from an
-Arduino Uno (R3 or R4) or a Nano 33 IoT using nothing but jumper wires. The
+Arduino Uno (R3 or R4), a Nano 33 IoT, or a Nano 33 BLE using nothing but
+jumper wires. The
 kit normally carries a Seeed XIAO on its back — but its XIAO socket is an
 ordinary pair of 2.54 mm pin sockets, and with the XIAO absent those sockets
 are a perfect jumper-wire header. Four wires get you mist; a few more get you
@@ -21,7 +22,7 @@ maker needs a very particular kind of pin to work at all.
 ### Things You'll Need
 
 - Mist Maker Battery Kit (V0.4.1) with its piezo disc, **no XIAO installed**
-- An Arduino Uno R3, Uno R4 (Minima or WiFi), or Nano 33 IoT
+- An Arduino Uno R3, Uno R4 (Minima or WiFi), Nano 33 IoT, or Nano 33 BLE
 - 4–10 male-to-male jumper wires
 - A **USB wall charger rated 1 A or more** (not a laptop port — see the power
   note below), or a 9 V supply for the Uno's barrel jack
@@ -51,9 +52,10 @@ library programs that timer for you, which is why it asks for specific pins:
 | Uno R3 | 9, 10 |
 | Nano 33 IoT | 5, 6, **9**, 10, 11 |
 | Uno R4 | 3, 5, 6, **9**, 10, 11 |
+| Nano 33 BLE | any digital pin (**9** recommended) |
 
-Pin **9** works on all three boards, so this guide wires everything the same
-way no matter which Arduino you have. If you pick a pin that can't do it, the
+Pin **9** works on every one of these boards, so this guide wires everything
+the same way no matter which Arduino you have. If you pick a pin that can't do it, the
 library stops you: `MISTMAKER_ASSERT_MIST_PIN` fails the compile with the
 valid pins in the message, and `begin()` returns false at runtime with the
 same hint on the Serial Monitor.
@@ -99,7 +101,8 @@ current draw and will sag the supply.
 
 Out of the box the Nano 33 IoT's 5V pin is **not connected** — Arduino ships
 it that way to protect 3.3 V projects. On the back of the board, find the
-solder jumper labeled **VUSB** and bridge it with a blob of solder. After
+solder jumper labeled **VUSB** and bridge it with a blob of solder. (The
+Nano 33 BLE has the same jumper and the same rule.) After
 that the 5V pin carries USB voltage and wire 1 works. (Uno R3 and R4 need no
 such step.)
 

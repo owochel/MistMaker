@@ -121,6 +121,21 @@ jobs:
               - examples/BatteryPowerTest
               - examples/WaterDetect
               - examples/JumperWireQuickStart
+          - board: Arduino Nano 33 BLE
+            fqbn: arduino:mbed_nano:nano33ble
+            platforms: |
+              - name: arduino:mbed_nano
+                version: 4.6.0
+            libraries: |
+              - source-path: ./
+            sketch-paths: |
+              - examples/Blink
+              - examples/Breath
+              - examples/ButtonPressToMist
+              - examples/ButtonOn-Off
+              - examples/BatteryPowerTest
+              - examples/WaterDetect
+              - examples/JumperWireQuickStart
     steps:
       - uses: actions/checkout@v4
       - name: Compile examples
