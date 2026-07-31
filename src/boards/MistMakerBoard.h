@@ -10,8 +10,10 @@
 // ---------------------------------------------------------------------------
 #if defined(ARDUINO_ARCH_ESP32)
 #define MISTMAKER_MIST_PIN_HINT "On XIAO ESP32 use an output-capable GPIO (the kits use D0)."
+#elif defined(ARDUINO_ARCH_AVR)
+#define MISTMAKER_MIST_PIN_HINT "On Arduino Uno R3 / classic Nano use pin 9 or 10."
 #else
-#error "MistMaker: this board is not supported yet. Supported: Seeed XIAO ESP32 boards."
+#error "MistMaker: this board is not supported. Supported: Seeed XIAO ESP32, Arduino Uno R3."
 #endif
 
 namespace MistMakerBoard {

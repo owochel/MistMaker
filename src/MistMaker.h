@@ -160,7 +160,57 @@ inline MistMakerPins MistMakerBlockKitV01() {
 inline MistMakerPins MistMakerLegacyV1() {
   return MistMakerPins{ D1, D3, D2, D7, D6, -1, -1 };
 }
+
+#elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_SAMD) || \
+      defined(ARDUINO_ARCH_RENESAS_UNO)
+// Jumper-wire presets for Arduino Uno (R3/R4) and Nano 33 IoT — same wiring
+// on all three boards. Kit pad -> Arduino pin:
+//
+//   MIST_PWM  (D0 pad) -> 9     BOOST EN (D3 pad) -> 7
+//   BUTTON    (D6 pad) -> 2     KIT LED  (D7 pad) -> 4
+//   VBAT      (D1 pad) -> A0    CURR SENSE (D2 pad) -> A1
+//   ST        (D8 pad) -> A2    GND <-> GND
+//
+// Full wiring guide with power options: docs/lab-jumper-wire-mist.md
+
+// Extension Kit V0.1 over jumpers: PWM + current sense only (needs 5V + GND,
+// plus 3.3V on the kit's 3V3 pad to power the sense amp).
+inline MistMakerPins MistMakerExtensionV01() {
+  return MistMakerPins{ 9, -1, A1, -1, -1, -1, -1 };
+}
+
+// Battery Kit V0.4 / V0.4.1 over jumpers into the empty XIAO socket.
+inline MistMakerPins MistMakerBatteryKitV04() {
+  return MistMakerPins{ 9, 7, A1, 4, 2, A0, A2 };
+}
+
+inline MistMakerPins MistMakerBatteryKitV041() {
+  return MistMakerBatteryKitV04();
+}
 #endif
+
+// ---------------------------------------------------------------------------
+// Compile-time mist-pin check. The mist pin must sit on a timer that can make
+// 108.7 kHz — most pins can't, and a wrong pin means zero mist. Put
+// MISTMAKER_ASSERT_MIST_PIN(pin) next to your pin choice and a bad pin stops
+// the compile with the fix in the message. begin() re-checks at runtime.
+// ---------------------------------------------------------------------------
+constexpr bool mistMakerValidMistPin(int pin) {
+#if defined(ARDUINO_ARCH_AVR)
+  return pin == 9 || pin == 10;                       // 16-bit Timer1 outputs
+#elif defined(ARDUINO_SAMD_NANO_33_IOT)
+  return pin == 5 || pin == 6 || pin == 9 || pin == 10 || pin == 11;
+#elif defined(ARDUINO_ARCH_RENESAS_UNO)
+  return pin == 3 || pin == 5 || pin == 6 || pin == 9 || pin == 10 || pin == 11;
+#else
+  return pin >= 0;                                    // begin() checks the rest
+#endif
+}
+
+#define MISTMAKER_ASSERT_MIST_PIN(pin) \
+  static_assert(mistMakerValidMistPin(pin), \
+    "MistMaker: this pin can't make the mist signal. Uno R3: 9 or 10. " \
+    "Nano 33 IoT: 5/6/9/10/11. Uno R4: 3/5/6/9/10/11.")
 
 // ---------------------------------------------------------------------------
 // Classifier results
