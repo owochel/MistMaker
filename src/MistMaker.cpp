@@ -1,4 +1,5 @@
 #include "MistMaker.h"
+#include "boards/MistMakerBoard.h"
 
 namespace {
   // Probe choreography (ms). Settle = let the drive + water column respond
@@ -18,11 +19,6 @@ namespace {
   constexpr float CAL_DISCONN_FRACTION  = 0.50f; // of wet working-duty reading
   constexpr float CAL_MIN_LOW_MA = 2.0f, CAL_MIN_WET_MA = 20.0f;
 
-  // ESP32 Arduino core ADC defaults (12-bit, ~3.3 V full scale). We read raw
-  // counts for current sense; battery uses analogReadMilliVolts (calibrated).
-  constexpr float ADC_FULL_SCALE_V = 3.3f;
-  constexpr float ADC_MAX_COUNT    = 4095.0f;
-
   // printStatus() uses a shorter averaging window than a real measurement —
   // it's a glance, not a reading.
   constexpr uint16_t STATUS_SAMPLE_MS = 20;
@@ -41,7 +37,8 @@ MistMaker::MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
     _buttonPin(buttonPin), _battPin(battPin), _usbSensePin(usbSensePin),
     _pwmFreq(pwmFreq), _pwmRes(pwmRes < 1 ? 1 : (pwmRes > 16 ? 16 : pwmRes)),
     // _pwmRes is initialized above (declaration order), so this is safe:
-    _dutyMax(resolveDutyCap(dutyMax)), _level(0), _state(false), _startTime(0),
+    _dutyMax(resolveDutyCap(dutyMax)), _hwTop(0),
+    _level(0), _state(false), _startTime(0),
     _senseFactor(MistMakerDefaults::SENSE_VOLTS_PER_AMP),
     _thDiscPresentMa(MistMakerDefaults::TH_DISC_PRESENT_MA),
     _thWaterLowMa(MistMakerDefaults::TH_WATER_LOW_MA),
@@ -86,13 +83,8 @@ void MistMaker::begin() {
   // read it as a plain high-Z INPUT — an internal pull would swamp the divider.
   if (_usbSensePin >= 0) pinMode(_usbSensePin, INPUT);
 
-  // NOTE: we deliberately do NOT call analogReadResolution() or
-  // analogSetPinAttenuation() — on ESP32-C6 + arduino-esp32 v3.x those calls
-  // have been observed to leave the ADC stuck at 0. Core defaults
-  // (12-bit, ~3.3 V full scale) are what every threshold here assumes.
-
-  ledcAttach(_mistPin, _pwmFreq, _pwmRes);
-  ledcWrite(_mistPin, 0);
+  MistMakerBoard::adcInit();
+  _hwTop = MistMakerBoard::pwmInit(_mistPin, _pwmFreq, _pwmRes);
   if (_enPin >= 0) digitalWrite(_enPin, LOW);
 
   _startTime = millis();
@@ -102,7 +94,13 @@ void MistMaker::begin() {
 // Basic control
 // ---------------------------------------------------------------------------
 void MistMaker::applyDuty(uint16_t duty) {
-  ledcWrite(_mistPin, duty);
+  if (_hwTop == 0) return;  // begin() not run, or the mist pin was rejected
+  // Logical 0..fullScale -> hardware 0..top, rounding half-up. On boards whose
+  // timer top equals the logical full scale this is an exact identity.
+  const uint16_t fullScale = (uint16_t)((1u << _pwmRes) - 1u);
+  uint32_t hw = ((uint32_t)duty * _hwTop + fullScale / 2u) / fullScale;
+  if (duty > 0 && hw == 0) hw = 1;
+  MistMakerBoard::pwmWrite(_mistPin, (uint16_t)hw);
 }
 
 void MistMaker::turnOn() {
@@ -117,7 +115,7 @@ void MistMaker::turnOff() {
   if (_enPin >= 0) digitalWrite(_enPin, LOW);
   if (_ledPin >= 0) digitalWrite(_ledPin, LOW);
   applyDuty(0);
-  digitalWrite(_mistPin, LOW);  // safety belt if the pin ever leaves LEDC
+  digitalWrite(_mistPin, LOW);  // safety belt if the pin ever leaves the timer
   _level = 0;
   _state = false;
 }
@@ -150,12 +148,12 @@ float MistMaker::readCurrentMa(uint16_t sampleMs) {
   uint32_t sum = 0, n = 0;
   const uint32_t start = millis();
   while (millis() - start < sampleMs) {
-    sum += analogRead(_sensePin);
+    sum += MistMakerBoard::senseRead(_sensePin);
     n++;
   }
   if (n == 0) return 0.0f;
-  const float volts = (float(sum) / float(n)) * ADC_FULL_SCALE_V / ADC_MAX_COUNT;
-  return volts * 1000.0f / _senseFactor;
+  const float mv = (float(sum) / float(n)) * MistMakerBoard::senseMvPerCount();
+  return mv / _senseFactor;  // mV / (V per A) = mA
 }
 
 void MistMaker::setSenseThresholds(float discPresentMa, float waterLowMa,
@@ -287,12 +285,8 @@ void MistMaker::setBatteryThresholds(float lowV, float criticalV) {
 float MistMaker::readBatteryVolts(uint8_t samples) {
   if (_battPin < 0) return 0.0f;
   if (samples == 0) samples = 1;
-  // analogReadMilliVolts() applies the chip's factory eFuse ADC calibration —
-  // linear millivolts even on ESP32-C6, where raw analogRead() is nonlinear
-  // (arduino-esp32 #11324). It does NOT need analogReadResolution() (the call
-  // we avoid on C6 v3.x), so this stays compatible with begin()'s note.
   uint32_t sum_mV = 0;
-  for (uint8_t i = 0; i < samples; i++) sum_mV += analogReadMilliVolts(_battPin);
+  for (uint8_t i = 0; i < samples; i++) sum_mV += MistMakerBoard::adcReadMv(_battPin);
   const float pinV = (float(sum_mV) / samples) / 1000.0f;
   return pinV * _battDivider;
 }

@@ -323,6 +323,7 @@ private:
   uint32_t _pwmFreq;
   uint8_t _pwmRes;
   uint16_t _dutyMax;
+  uint16_t _hwTop;   // hardware duty for 100% (from the board layer; 0 = PWM not running)
   uint8_t _level;
   bool _state;
   unsigned long _startTime;
