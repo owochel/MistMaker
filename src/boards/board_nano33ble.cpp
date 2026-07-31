@@ -5,12 +5,14 @@
 #if defined(ARDUINO_ARCH_NRF52840)
 
 #include "MistMakerBoard.h"
+#include "mbed.h"
 #include "nrf.h"
 #include "pinDefinitions.h"
 
 namespace {
   NRF_PWM_Type* const kPwm = NRF_PWM3;
   volatile uint16_t seqValue;  // DMA-read by the PWM; bit 15 = normal polarity
+  bool sleepLocked = false;
 }
 
 namespace MistMakerBoard {
@@ -43,6 +45,12 @@ uint16_t pwmInit(int8_t pin, uint32_t freqHz, uint8_t resBits) {
   kPwm->SEQ[0].ENDDELAY = 0;
   kPwm->ENABLE = 1;
   kPwm->TASKS_SEQSTART[0] = 1;
+  // mbed's deep sleep (entered during idle delay()) stops the 16 MHz PWM
+  // clock and with it the mist — keep the system in shallow sleep instead.
+  if (!sleepLocked) {
+    sleep_manager_lock_deep_sleep();
+    sleepLocked = true;
+  }
   return (uint16_t)top;
 }
 
