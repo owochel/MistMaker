@@ -6,26 +6,16 @@
 // library distinguish USB power from battery power. Battery Kit V0.3 cannot
 // reliably identify the active power source.
 //
-// Board: Seeed XIAO ESP32-C6 — pick "XIAO_ESP32C6" in Tools > Board.
+// Boards: a Seeed XIAO ESP32 in the kit's socket, or an Arduino Uno R3/R4
+// or Nano 33 IoT on jumper wires — this sketch needs the battery and ST
+// wires connected (wiring: examples/JumperWireQuickStart).
 // Serial Monitor: 115200 baud.
 
 #include <MistMaker.h>
 
-// Battery Kit V0.4/V0.4.1 pin map
-const int MIST_OUTPUT_PIN   = D0;
-const int BATTERY_PIN       = D1;
-const int CURRENT_SENSE_PIN = D2;
-const int EN_PIN            = D3;
-const int BUTTON_PIN        = D6;
-const int LED_PIN           = D7;
-const int USB_SENSE_PIN     = D8;
-
-// Recommended: use the preset for your board revision.
+// Preset for the board revision. Pin order for manual wiring:
+// MistMaker mist(mist, boostEn, sense, led, button, battery, usbSense);
 MistMaker mist(MistMakerBatteryKitV041());
-
-// To assign the pins manually, comment out the line above and uncomment:
-// MistMaker mist(MIST_OUTPUT_PIN, EN_PIN, CURRENT_SENSE_PIN, LED_PIN,
-//                BUTTON_PIN, BATTERY_PIN, USB_SENSE_PIN);
 
 void setup() {
   Serial.begin(115200);
