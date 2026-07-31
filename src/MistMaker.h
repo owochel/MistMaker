@@ -201,7 +201,10 @@ public:
             uint8_t  pwmRes  = MistMakerDefaults::PWM_RES_BITS,
             int      dutyMax = MistMakerDefaults::DUTY_AUTO);
 
-  void begin();
+  // Returns false if the mist pin can't make the 108.7 kHz signal on this
+  // board (a message with the valid pins prints to Serial). Callers that
+  // ignore the return keep working as before.
+  bool begin();
 
   // ------------------- basic control -------------------
   void turnOn();              // full power (= dutyMax)

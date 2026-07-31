@@ -8,7 +8,9 @@
 // ADC. One implementation file per board family in this folder; MistMaker.cpp
 // only ever calls these seven functions.
 // ---------------------------------------------------------------------------
-#if !defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32)
+#define MISTMAKER_MIST_PIN_HINT "On XIAO ESP32 use an output-capable GPIO (the kits use D0)."
+#else
 #error "MistMaker: this board is not supported yet. Supported: Seeed XIAO ESP32 boards."
 #endif
 

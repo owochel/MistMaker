@@ -25,6 +25,9 @@ namespace {
 
   // Below any plausible cell voltage -> battery pin floating / not connected.
   constexpr float BATT_ABSENT_V = 0.5f;
+
+  // usbPresent() analog threshold: ST reads ~3.1 V on USB, ~0 V on the cell.
+  constexpr uint16_t ST_USB_THRESHOLD_MV = 2000;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +76,7 @@ uint16_t MistMaker::resolveDutyCap(int requested) const {
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
-void MistMaker::begin() {
+bool MistMaker::begin() {
   if (_ledPin >= 0)    pinMode(_ledPin, OUTPUT);
   if (_enPin >= 0)     pinMode(_enPin, OUTPUT);
   if (_sensePin >= 0)  pinMode(_sensePin, INPUT);
@@ -88,6 +91,12 @@ void MistMaker::begin() {
   if (_enPin >= 0) digitalWrite(_enPin, LOW);
 
   _startTime = millis();
+  if (_hwTop == 0) {
+    Serial.print(F("[MistMaker] Mist pin can't make the mist signal here. "));
+    Serial.println(F(MISTMAKER_MIST_PIN_HINT));
+    return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +314,10 @@ bool MistMaker::usbPresent() {
   // ST HIGH = mux sourcing VIN1 (USB), LOW = VIN2 (cell). See TPS2116 §7.3.3.
   // No sense pin -> assume USB present (fail safe: don't blind-shutdown).
   if (_usbSensePin < 0) return true;
+  // On 5 V boards ST's ~3.1 V high is marginal for digitalRead, so boards that
+  // can read it as analog do (threshold well between LOW ~0 V and HIGH ~3.1 V).
+  if (MistMakerBoard::analogCapable(_usbSensePin))
+    return MistMakerBoard::adcReadMv(_usbSensePin) >= ST_USB_THRESHOLD_MV;
   return digitalRead(_usbSensePin) == HIGH;
 }
 
