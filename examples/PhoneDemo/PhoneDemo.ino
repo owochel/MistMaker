@@ -150,7 +150,7 @@ String jsonEsc(const char* s) {
   return o;
 }
 
-// 0-100 percentage; the library caps real PWM duty at 50%, so 100 = full mist.
+// 0-100 percentage; the library caps real PWM duty at 33%, so 100 = full mist.
 void applyLevel(int pct) {
   pct = constrain(pct, 0, 100);
   if (pct == level) return;

@@ -54,7 +54,7 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 > - The constructor's last argument (duty cap) now **takes effect** — 1.x
 >   accepted and ignored it. Valid caps are `1..90% of full scale` (higher
 >   requests clamp to 90% — above it the drive makes heat, not mist);
->   zero/negative/omitted resolve to the 50% efficiency knee, which is exactly
+>   zero/negative/omitted resolve to the 33% thermal sweet spot, which is exactly
 >   the 1.x behavior. If an old sketch passed a valid value like `200`, it
 >   will now really drive that duty — remove the argument to keep 1.x drive.
 > - Everything else is source-compatible.
@@ -146,14 +146,34 @@ bench-characterized on real V0.4 hardware (2026-07-03 duty sweep, 0→90%):
 
 | Duty cap | What you get |
 |---|---|
-| **127 (50%) — the default** | The efficiency sweet spot: ~90% of practical mist at ~¼ of peak power, cool components, battery-sustainable (~0.3 A from the cell). Ships as `DUTY_AUTO`. |
+| **85 (33%) — the default** | The thermal sweet spot: a good amount of mist with the tapped inductor staying cool over long runs, and easily battery-sustainable. Ships as `DUTY_AUTO`. |
+| 127 (50%) | The old default (≤ 2.5.x). More mist, still well inside safe territory; ~0.3 A from the cell, components warm but fine. Pass `127` to get 2.5.x behaviour back. |
 | **`MistMakerDefaults::DUTY_TURBO` (178 ≈ 70%)** | The **true mist maximum** — output rises all the way to ~70% duty on this drive. Costs ~4× the input power, needs a strong 5 V supply (≥ 2 A wall adapter); a battery reaches it only seconds at full charge. |
 | Above ~75% | Measurably *worse*: mist declines and turns unstable while current climbs toward 2 A — the resonant fly-back gets clipped and the energy becomes heat. The library hard-limits at 90% of full scale. |
 
 ```cpp
 mist.setMaxDuty(MistMakerDefaults::DUTY_TURBO);  // wall-powered "turbo"
-mist.setMaxDuty(MistMakerDefaults::DUTY_AUTO);   // back to the 50% default
+mist.setMaxDuty(MistMakerDefaults::DUTY_AUTO);   // back to the 33% default
+mist.setMaxDuty(127);                            // the pre-2.6 default
 ```
+
+> [!IMPORTANT]
+> **2.6.0 lowered the default cap from 127 (50%) to 85 (33%)** — bench-tested as
+> good mist with the inductor staying cool on long runs. Because `setLevel()` is
+> a ratio of the cap (see below), **every level now drives ~33% less than it did
+> on 2.5.x** — this is a behaviour change, not just a new ceiling. A sketch that
+> ran `setLevel(255)` gets 33% duty where it used to get 50%. To restore the old
+> output exactly, pass the cap explicitly:
+>
+> ```cpp
+> MistMaker mist(MistMakerBatteryKitV041(), MistMakerDefaults::PWM_FREQ_HZ,
+>                MistMakerDefaults::PWM_RES_BITS, 127);
+> // or at runtime: mist.setMaxDuty(127);
+> ```
+>
+> Current-sense calibration is unaffected — `PROBE_DUTY` and `WATER_PROBE_DUTY`
+> are fixed absolute duties, independent of the cap, so disc and water detection
+> keep working against the same thresholds.
 
 Setting a cap doesn't change your sketch's `setLevel(0..255)` scale — 255
 always means "my current maximum."
@@ -163,14 +183,14 @@ always means "my current maximum."
 > rescaled onto the cap — `duty = level / 255 × dutyMax` — so raising the cap
 > makes *every* level stronger, not just the ones that used to clip:
 >
-> | `setLevel()` | duty at the default cap (127) | duty at `DUTY_TURBO` (178) |
+> | `setLevel()` | duty at the default cap (85) | duty at `DUTY_TURBO` (178) |
 > |---|---|---|
-> | 255 | 127 (50%) | 178 (70%) |
-> | 128 | 64 (~25%) | 89 (~35%) |
-> | 64 | 32 (~13%) | 45 (~18%) |
+> | 255 | 85 (33%) | 178 (70%) |
+> | 128 | 43 (~17%) | 89 (~35%) |
+> | 64 | 21 (~8%) | 45 (~18%) |
 >
 > So `setLevel(128)` is "half of what this board is currently allowed to make,"
-> not a fixed 25% duty. `setMaxDuty()` re-applies the current level immediately,
+> not a fixed duty. `setMaxDuty()` re-applies the current level immediately,
 > so a change mid-mist takes effect at once. Two edges worth knowing:
 > `setLevel(0)` is special-cased to `turnOff()` (it drops the enable pin and
 > LED, not just duty), and any nonzero level floors at `duty = 1`, so a low
@@ -361,7 +381,7 @@ probe/calibration timing constants sit at the top of `MistMaker.cpp`.
 // --- construction ---
 MistMaker(const MistMakerPins &pins, uint32_t pwmFreq = 108700,
           uint8_t pwmRes = 8,
-          int dutyMax = MistMakerDefaults::DUTY_AUTO); // AUTO = 50% efficiency knee
+          int dutyMax = MistMakerDefaults::DUTY_AUTO); // AUTO = 33% thermal sweet spot
 MistMaker(int mistPin, int enPin, int sensePin, int ledPin,
           int buttonPin = -1, int battPin = -1, int usbSensePin = -1, ...);
 
@@ -370,7 +390,7 @@ bool begin();                    // false = mist pin can't make 108.7 kHz here
 void turnOn();  void turnOff();  void toggle();  bool isOn();
 void setLevel(uint8_t level);    // 0..255 dimming
 uint8_t getLevel();
-void setMaxDuty(int duty);       // default 127 (50%); DUTY_TURBO=178 = measured peak
+void setMaxDuty(int duty);       // default 85 (33%); DUTY_TURBO=178 = measured peak
 void printStatus();
 
 // --- current sense / detection ---

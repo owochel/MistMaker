@@ -69,9 +69,12 @@ uint16_t MistMaker::resolveDutyCap(int requested) const {
   const uint16_t ceiling = (uint16_t)(((uint32_t)fullScale * 9u) / 10u);
   if (requested >= 1 && requested <= (int)ceiling) return (uint16_t)requested;
   if (requested > (int)ceiling) return ceiling;
-  // DUTY_AUTO, 0, or negatives: 50% of full scale — the efficiency knee.
-  const uint16_t half = (uint16_t)(fullScale / 2);
-  return half < 1 ? 1 : half;
+  // DUTY_AUTO, 0, or negatives: 1/3 of full scale (= 85 at 8-bit) — the
+  // thermal sweet spot. Bench-tested as producing a good amount of mist while
+  // keeping the tapped inductor cool. Expressed as a fraction, not a literal
+  // 85, so it stays 33% at any configured PWM resolution.
+  const uint16_t third = (uint16_t)(fullScale / 3);
+  return third < 1 ? 1 : third;
 }
 
 // ---------------------------------------------------------------------------

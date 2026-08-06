@@ -5,7 +5,7 @@
 
 // Library version — keep in lockstep with library.properties. Sketches can
 // print it in banners/test reports: Serial.println(MISTMAKER_VERSION);
-#define MISTMAKER_VERSION "2.5.0"
+#define MISTMAKER_VERSION "2.6.0"
 
 // ===========================================================================
 // MistMaker — Arduino library for the Programmable Mist Maker (OSHWA US002742)
@@ -15,6 +15,11 @@
 //   MistMaker mist(MistMakerBatteryKitV04());
 //   void setup() { mist.begin(); mist.setLevel(180); }
 //
+// v2.6   Default duty cap lowered from 1/2 to 1/3 of full scale (127 -> 85 at
+//        8-bit): bench-tested as good mist with the tapped inductor staying
+//        cool on long runs. BEHAVIOUR CHANGE — setLevel() is a ratio of the
+//        cap, so every level now drives ~33% less than on 2.5.x. To keep the
+//        old output: mist.setMaxDuty(127) (or pass 127 to the constructor).
 // v2.5   Runs on Arduino Uno R3, Uno R4, Nano 33 IoT, and Nano 33 BLE
 //        (jumper-wired to the kits) alongside XIAO ESP32 — per-chip timer code lives in
 //        src/boards/. Same API, same 0..255 levels everywhere. begin() now
@@ -40,8 +45,8 @@
 //   * the constructor's duty-cap parameter now actually takes effect (it was
 //     silently ignored in 1.x). Valid caps are 1..90% of full scale; higher
 //     requests clamp to 90% (above it the drive makes heat, not mist —
-//     bench-measured); zero/negative/DUTY_AUTO resolve to 50% of full scale
-//     (= 127 at 8-bit, the 1.x behavior).
+//     bench-measured); zero/negative/DUTY_AUTO resolve to 1/3 of full scale
+//     (= 85 at 8-bit; this was 1/2 = 127 through 2.5.x).
 //   * removed: applyLevel() alias -> use setLevel();
 //              readCurrentVoltage() -> use readCurrentMa() (NOTE: different
 //              unit — see README migration note)
@@ -64,15 +69,18 @@
 // on different hardware.
 // ---------------------------------------------------------------------------
 namespace MistMakerDefaults {
-  // Piezo drive. 108.7 kHz = disc resonance. The duty cap defaults to 50% of
-  // full scale (127 at 8-bit) — the efficiency/stability knee, NOT a mist
-  // maximum. Bench sweep (V0.4, 2026-07-03): mist keeps increasing past 50%,
-  // but drive current goes superlinear (224 mA @50% -> 1.1 A @75%), the
-  // autotransformer saturates and runs hot by ~62%, and total USB draw
-  // (~1.5 A @75%) sags VBUS into a brownout reset. Raise the cap past 127
-  // only deliberately: strong supply, short bursts, watch L1's temperature.
-  // DUTY_AUTO = "resolve to that 50% for whatever resolution is configured";
+  // Piezo drive. 108.7 kHz = disc resonance. The duty cap defaults to 1/3 of
+  // full scale (85 at 8-bit, 33%) — the thermal sweet spot, NOT a mist
+  // maximum: bench-tested as good mist output with the tapped inductor staying
+  // cool over long runs. Mist keeps increasing above it, but so does heat.
+  // Bench sweep (V0.4, 2026-07-03) for the shape of the curve: drive current
+  // goes superlinear (224 mA @50% -> 1.1 A @75%), the autotransformer
+  // saturates and runs hot by ~62%, and total USB draw (~1.5 A @75%) sags VBUS
+  // into a brownout reset. Raise the cap only deliberately: strong supply,
+  // short bursts, watch L1's temperature.
+  // DUTY_AUTO = "resolve to that 1/3 for whatever resolution is configured";
   // any out-of-range cap resolves the same way.
+  // Changed in 2.6.0: was 1/2 of full scale (127 at 8-bit) through 2.5.x.
   constexpr uint32_t PWM_FREQ_HZ  = 108700;
   constexpr uint8_t  PWM_RES_BITS = 8;
   constexpr int      DUTY_AUTO    = 0;
@@ -241,7 +249,7 @@ class MistMaker {
 public:
   // Pin-preset constructor (preferred). `dutyMax` caps the PWM duty that
   // setLevel(255)/turnOn() reach. Valid range 1..(2^pwmRes - 1); anything
-  // else (including DUTY_AUTO) = 50% of full scale, the efficiency knee
+  // else (including DUTY_AUTO) = 1/3 of full scale, the thermal sweet spot
   // (see the MistMakerDefaults note before driving past it).
   MistMaker(const MistMakerPins &pins,
             uint32_t pwmFreq = MistMakerDefaults::PWM_FREQ_HZ,
@@ -274,7 +282,7 @@ public:
   void setLevel(uint8_t level);
   uint8_t getLevel() const { return _level; }
   // Same validity policy as the constructor (1..90% of full scale; higher
-  // clamps to 90%; <=0 -> 50% auto). Takes effect immediately, even mid-mist.
+  // clamps to 90%; <=0 -> 1/3 auto). Takes effect immediately, even mid-mist.
   void setMaxDuty(int dutyMax) {
     _dutyMax = resolveDutyCap(dutyMax);
     if (_state && _level > 0) setLevel(_level);   // re-apply at the new cap
@@ -375,7 +383,7 @@ private:
   float probeAtDuty(uint16_t duty, uint16_t settleMs, uint16_t sampleMs);
   void applyDuty(uint16_t duty);
   // Clamp a requested duty cap to 1..(2^pwmRes - 1); out-of-range (incl.
-  // DUTY_AUTO and 1.x-era ignored values) -> 50% of full scale.
+  // DUTY_AUTO and 1.x-era ignored values) -> 1/3 of full scale.
   uint16_t resolveDutyCap(int requested) const;
 
   int8_t _mistPin, _enPin, _sensePin, _ledPin, _buttonPin, _battPin, _usbSensePin;
