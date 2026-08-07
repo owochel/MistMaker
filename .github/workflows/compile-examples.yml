@@ -71,8 +71,8 @@ jobs:
             sketch-paths: |
               - examples/Blink
               - examples/Breath
-              - examples/ButtonPressToMist
-              - examples/ButtonOn-Off
+              - examples/ToggleSwitch
+              - examples/PushButton
               - examples/BatteryPowerTest
               - examples/WaterDetect
               - examples/JumperWireQuickStart
@@ -86,8 +86,8 @@ jobs:
             sketch-paths: |
               - examples/Blink
               - examples/Breath
-              - examples/ButtonPressToMist
-              - examples/ButtonOn-Off
+              - examples/ToggleSwitch
+              - examples/PushButton
               - examples/BatteryPowerTest
               - examples/WaterDetect
               - examples/JumperWireQuickStart
@@ -101,8 +101,8 @@ jobs:
             sketch-paths: |
               - examples/Blink
               - examples/Breath
-              - examples/ButtonPressToMist
-              - examples/ButtonOn-Off
+              - examples/ToggleSwitch
+              - examples/PushButton
               - examples/BatteryPowerTest
               - examples/WaterDetect
               - examples/JumperWireQuickStart
@@ -116,8 +116,8 @@ jobs:
             sketch-paths: |
               - examples/Blink
               - examples/Breath
-              - examples/ButtonPressToMist
-              - examples/ButtonOn-Off
+              - examples/ToggleSwitch
+              - examples/PushButton
               - examples/BatteryPowerTest
               - examples/WaterDetect
               - examples/JumperWireQuickStart
@@ -131,8 +131,8 @@ jobs:
             sketch-paths: |
               - examples/Blink
               - examples/Breath
-              - examples/ButtonPressToMist
-              - examples/ButtonOn-Off
+              - examples/ToggleSwitch
+              - examples/PushButton
               - examples/BatteryPowerTest
               - examples/WaterDetect
               - examples/JumperWireQuickStart
