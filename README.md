@@ -54,9 +54,10 @@ This project is [Open Source Hardware Certified](https://certification.oshwa.org
 > - The constructor's last argument (duty cap) now **takes effect** — 1.x
 >   accepted and ignored it. Valid caps are `1..90% of full scale` (higher
 >   requests clamp to 90% — above it the drive makes heat, not mist);
->   zero/negative/omitted resolve to the 33% thermal sweet spot, which is exactly
->   the 1.x behavior. If an old sketch passed a valid value like `200`, it
->   will now really drive that duty — remove the argument to keep 1.x drive.
+>   zero/negative/omitted resolve to the default cap, which in 2.0–2.5 was
+>   127 (50%), matching 1.x drive. **Since 2.6 that default is 85 (33%)** — pass
+>   `127` explicitly if you want 1.x/2.0-era drive. If an old sketch passed a
+>   valid value like `200`, it will now really drive that duty.
 > - Everything else is source-compatible.
 
 ---
@@ -259,8 +260,8 @@ board in their comments:
 | `Blink` | Hello-world: mist 6 s on / 3 s off, LED follows |
 | `JumperWireQuickStart` | First mist from an Arduino Uno / Nano 33 IoT on jumper wires — wiring in the sketch header |
 | `Breath` | Mist that breathes — smooth fade in, hold, fade out with `setLevel()` |
-| `ButtonPressToMist` | Hold the Battery Kit button to mist; release it to stop |
-| `ButtonOn-Off` | Debounced press-on/press-off toggle using `buttonPressed()` |
+| `ToggleSwitch` | Mist follows the switch level — a latching toggle switch runs it until flipped off (hold-to-mist on a momentary button) |
+| `PushButton` | Press on / press off from a momentary button — debounced edge detection around `toggle()` |
 | `BatteryPowerTest` | Report USB/cell source, battery voltage, percent, and state on V0.4/V0.4.1 |
 | `WaterDetect` | Self-minding mist: stops when water runs out or the disc comes off, resumes by itself; `'c'` auto-calibrates |
 | `PhoneDemo` | Drive the mist from a phone's mic/light/motion/face/music via a Cloudflare relay; sync many makers ([extras/phone-app](extras/phone-app)) |
